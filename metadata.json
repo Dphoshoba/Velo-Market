@@ -1,0 +1,7 @@
+{
+  "name": "VeloMarket Multi-Vendor Marketplace",
+  "description": "A high-performance artisan marketplace where creators list products and buyers enjoy a unified checkout experience with automated commission handling.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
