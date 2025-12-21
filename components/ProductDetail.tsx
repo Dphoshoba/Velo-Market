@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Product } from '../types';
+import VoiceAssistant from './VoiceAssistant';
 
 interface ProductDetailProps {
   product: Product;
@@ -11,7 +12,9 @@ interface ProductDetailProps {
 
 const ProductDetail: React.FC<ProductDetailProps> = ({ product, onAddToCart, onBack, onVendorClick }) => {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm relative">
+      <VoiceAssistant contextPrompt={`The user is viewing a product named "${product.name}" in the "${product.category}" category. The description is: ${product.description}. The price is $${product.price}. Handled by vendor ${product.vendorName}. Help the user decide if they should buy it.`} />
+      
       <div className="grid grid-cols-1 md:grid-cols-2">
         <div className="h-[400px] md:h-auto">
           <img src={product.image} className="w-full h-full object-cover" alt={product.name} />

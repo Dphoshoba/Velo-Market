@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, Product, Review } from '../types';
 import { StorageService } from '../services/storage';
 import ProductGrid from './ProductGrid';
+import VoiceAssistant from './VoiceAssistant';
 
 interface VendorProfileProps {
   vendor: User;
@@ -87,7 +88,9 @@ const VendorProfile: React.FC<VendorProfileProps> = ({ vendor, products, current
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 relative">
+      <VoiceAssistant contextPrompt={`The user is viewing the store of "${vendor.storeName || vendor.name}". This is an artisan shop of type "${vendor.businessType}". They have ${products.length} products listed. Their story is: ${vendor.longDescription}. Help the user learn about this vendor.`} />
+      
       <button onClick={onBack} className="text-sm font-medium text-slate-400 hover:text-indigo-600 flex items-center gap-1">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         Back to browse

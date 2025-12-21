@@ -13,10 +13,13 @@ interface SellerDashboardProps {
 }
 
 const SellerDashboard: React.FC<SellerDashboardProps> = ({ user, products, onAddProduct, onUpdateProduct, onUpdateUser, onPreviewPolicy }) => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'settings'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'analytics' | 'settings'>('inventory');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Shipped' | 'Delivered'>('All');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [generatingVideoId, setGeneratingVideoId] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState("");
+  const [promoVideoUrl, setPromoVideoUrl] = useState<string | null>(null);
+  
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: 0,
@@ -26,22 +29,38 @@ const SellerDashboard: React.FC<SellerDashboardProps> = ({ user, products, onAdd
     rating: 5
   });
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isBranding, setIsBranding] = useState(false);
   const [localTracking, setLocalTracking] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Profile Form State initialized with current user data
   const [profileForm, setProfileForm] = useState<User>({ ...user });
 
-  const totalSales = products.length * 45; // Mock data
+  const totalSales = products.length * 245; 
   const platformCutPercent = profileForm.commissionRate || 10;
   const platformCut = totalSales * (platformCutPercent / 100);
   const netEarnings = totalSales - platformCut;
 
-  const filteredProducts = products.filter(p => {
-    if (statusFilter === 'All') return true;
-    if (statusFilter === 'Active') return !p.status || p.status === 'Active';
-    return p.status === statusFilter;
-  });
+  const handleGenerateVideo = async (product: Product) => {
+    // @ts-ignore
+    if (!await window.aistudio.hasSelectedApiKey()) {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+    }
+    
+    setGeneratingVideoId(product.id);
+    try {
+      const url = await GeminiService.generatePromoVideo(product.name, product.description, product.image, setVideoStatus);
+      setPromoVideoUrl(url);
+    } catch (err: any) {
+      if (err.message.includes("Requested entity was not found")) {
+        alert("API Key reset required. Please select a valid paid key.");
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+      } else {
+        alert("Video generation encountered an error. Please check your billing settings.");
+      }
+      setGeneratingVideoId(null);
+    }
+  };
 
   const handleEnhance = async () => {
     if (!newProduct.name) return alert('Please enter a product name first.');
@@ -51,13 +70,21 @@ const SellerDashboard: React.FC<SellerDashboardProps> = ({ user, products, onAdd
     setIsEnhancing(false);
   };
 
+  const handleBrandStoryAI = async () => {
+    if (!profileForm.storeName || !profileForm.bio) return alert('Enter store name and tagline first.');
+    setIsBranding(true);
+    const story = await GeminiService.generateStoreStory(profileForm.storeName, profileForm.businessType || 'Artisan', profileForm.bio);
+    setProfileForm(prev => ({ ...prev, longDescription: story }));
+    setIsBranding(false);
+  };
+
   const handleAddProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const product: Product = {
       id: 'p' + Date.now(),
       vendorId: user.id,
       vendorName: user.storeName || user.name,
-      image: `https://picsum.photos/seed/${newProduct.name}/600/400`,
+      image: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 1000000)}?auto=format&fit=crop&q=80&w=800`,
       reviewsCount: 0,
       status: 'Active',
       trackingHistory: [],
@@ -70,637 +97,267 @@ const SellerDashboard: React.FC<SellerDashboardProps> = ({ user, products, onAdd
 
   const handleMarkAsShipped = (product: Product) => {
     const tracking = localTracking[product.id] || product.trackingNumber || '';
-    if (!tracking) {
-      alert("Please provide a tracking number before marking as shipped.");
-      return;
-    }
-    
-    const newEntry: TrackingEntry = {
-      number: tracking,
-      date: new Date().toLocaleString()
-    };
-
-    const updatedProduct: Product = {
+    if (!tracking) return alert("Provide tracking number first.");
+    const newEntry: TrackingEntry = { number: tracking, date: new Date().toLocaleString() };
+    onUpdateProduct({
       ...product,
       status: 'Shipped',
       trackingNumber: tracking,
       trackingHistory: [...(product.trackingHistory || []), newEntry]
-    };
-    onUpdateProduct(updatedProduct);
+    });
     setLocalTracking(prev => ({ ...prev, [product.id]: '' }));
-    alert(`${product.name} marked as shipped with tracking: ${tracking}`);
-  };
-
-  const handleMarkAsDelivered = (product: Product) => {
-    const updatedProduct: Product = {
-      ...product,
-      status: 'Delivered'
-    };
-    onUpdateProduct(updatedProduct);
-    alert(`${product.name} marked as delivered.`);
-  };
-
-  const handleTrackingChange = (productId: string, value: string) => {
-    setLocalTracking(prev => ({ ...prev, [productId]: value }));
-  };
-
-  const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateUser(profileForm);
-    alert('Store settings updated successfully!');
-  };
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Logo must be smaller than 2MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileForm(prev => ({
-          ...prev,
-          storeLogo: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const getStatusColor = (status: Product['status']) => {
-    switch (status) {
-      case 'Shipped': return 'text-indigo-600 bg-indigo-50 border-indigo-100';
-      case 'Delivered': return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-      default: return 'text-amber-600 bg-amber-50 border-amber-100';
-    }
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in relative">
+      {generatingVideoId && (
+        <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-6">
+          <div className="bg-white rounded-[48px] p-12 max-w-lg w-full text-center space-y-8 shadow-2xl animate-fade-in">
+            <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto">
+               <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-3xl font-black text-slate-900">Velo Cinematic Studio</h3>
+              <p className="text-slate-500 font-medium leading-relaxed">{videoStatus}</p>
+            </div>
+            <div className="pt-4 flex flex-col items-center gap-4">
+               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-600 animate-[loading_120s_ease-in-out]"></div>
+               </div>
+               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Veo 3.1 Fast Render Engine</p>
+            </div>
+            {!promoVideoUrl && (
+              <button 
+                onClick={() => setGeneratingVideoId(null)}
+                className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
+              >
+                Cancel Generation
+              </button>
+            )}
+            {promoVideoUrl && (
+              <div className="space-y-6">
+                <video src={promoVideoUrl} controls autoPlay className="w-full rounded-3xl border shadow-lg" />
+                <button onClick={() => { setPromoVideoUrl(null); setGeneratingVideoId(null); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold">Close Studio</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900">Seller Dashboard</h1>
-          <p className="text-slate-500">Managing <span className="text-indigo-600 font-bold">{user.storeName || user.name}</span></p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Management Suite</h1>
+          <p className="text-slate-500 font-medium">Global operations for <span className="text-indigo-600 font-bold">{user.storeName || user.name}</span></p>
         </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setActiveTab('inventory')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all ${activeTab === 'inventory' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            Inventory
-          </button>
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            Store Settings
-          </button>
+        <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
+          {(['inventory', 'analytics', 'settings'] as const).map(tab => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2 rounded-xl text-sm font-bold capitalize transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-900'}`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
       </div>
 
-      {activeTab === 'inventory' && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Total Sales</p>
-              <p className="text-3xl font-black text-slate-900">${totalSales.toLocaleString()}</p>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Platform Fees ({platformCutPercent}%)</p>
-              <p className="text-3xl font-black text-red-500">-${platformCut.toLocaleString()}</p>
-            </div>
-            <div className="bg-indigo-600 p-6 rounded-2xl border border-indigo-700 shadow-lg text-white">
-              <p className="text-sm font-bold text-indigo-200 uppercase tracking-wider mb-1">Net Earnings</p>
-              <p className="text-3xl font-black">${netEarnings.toLocaleString()}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              {(['All', 'Active', 'Shipped', 'Delivered'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${statusFilter === f ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-            <button 
-              onClick={() => setShowAddForm(true)}
-              className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition-all text-sm flex items-center gap-2 w-full sm:w-auto justify-center"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              Add Product
-            </button>
-          </div>
-
-          {showAddForm && (
-            <div className="bg-white p-8 rounded-3xl border border-indigo-100 shadow-2xl animate-in slide-in-from-top duration-300">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">List a New Product</h2>
-                <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-slate-600">
-                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <form onSubmit={handleAddProductSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Product Name</label>
-                    <input 
-                      type="text" required
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={newProduct.name}
-                      onChange={e => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Price ($)</label>
-                    <input 
-                      type="number" required min="1"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={newProduct.price}
-                      onChange={e => setNewProduct(prev => ({ ...prev, price: Number(e.target.value) }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Average Rating (1-5)</label>
-                    <input 
-                      type="number" required min="1" max="5" step="0.1"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={newProduct.rating}
-                      onChange={e => setNewProduct(prev => ({ ...prev, rating: Number(e.target.value) }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Category</label>
-                    <select 
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                      value={newProduct.category}
-                      onChange={e => setNewProduct(prev => ({ ...prev, category: e.target.value }))}
-                    >
-                      <option value="Home Decor">Home Decor</option>
-                      <option value="Kitchen">Kitchen</option>
-                      <option value="Apparel">Apparel</option>
-                      <option value="Art">Art</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Initial Stock</label>
-                    <input 
-                      type="number" required min="0"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={newProduct.stock}
-                      onChange={e => setNewProduct(prev => ({ ...prev, stock: Number(e.target.value) }))}
-                    />
-                  </div>
-                </div>
+      {activeTab === 'analytics' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           <div className="lg:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm space-y-8">
+              <div className="flex justify-between items-end">
                 <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-bold text-slate-700">Description</label>
-                    <button 
-                      type="button"
-                      onClick={handleEnhance}
-                      disabled={isEnhancing}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {isEnhancing ? 'Writing...' : '✨ Enhance with AI'}
-                    </button>
-                  </div>
-                  <textarea 
-                    required rows={4}
-                    className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={newProduct.description}
-                    onChange={e => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
-                  />
+                  <h3 className="text-xl font-bold">Revenue Distribution</h3>
+                  <p className="text-sm text-slate-400">Monthly split-payment visualization</p>
                 </div>
-                <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-all">
-                  Publish Product
-                </button>
-              </form>
-            </div>
-          )}
+                <div className="text-right">
+                   <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Gross Sales</p>
+                   <p className="text-2xl font-black text-slate-900">${totalSales.toLocaleString()}</p>
+                </div>
+              </div>
+              
+              <div className="h-64 flex items-end justify-between gap-4 px-4 pb-2 border-b">
+                 {[40, 65, 30, 85, 45, 90, 70].map((h, i) => (
+                   <div key={i} className="flex-grow group relative">
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                         ${Math.floor(h * 123)}
+                      </div>
+                      <div className="bg-indigo-100 rounded-t-lg group-hover:bg-indigo-200 transition-colors w-full" style={{ height: `${h}%` }}></div>
+                   </div>
+                 ))}
+              </div>
+              <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-tighter px-2">
+                 <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                  <tr>
-                    <th className="px-6 py-4">Product</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Stock</th>
-                    <th className="px-6 py-4">Price</th>
-                    <th className="px-6 py-4">Fulfillment</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y text-sm">
-                  {filteredProducts.map(p => (
-                    <React.Fragment key={p.id}>
-                      <tr className="hover:bg-slate-50 group">
-                        <td className="px-6 py-4 flex items-center gap-3">
-                          <img src={p.image} className="w-10 h-10 rounded border object-cover" alt="" />
-                          <span className="font-bold text-slate-700">{p.name}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${getStatusColor(p.status)}`}>
-                            {p.status || 'Active'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">{p.stock} units</td>
-                        <td className="px-6 py-4 font-bold text-indigo-600">${p.price}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              {p.status !== 'Delivered' && (
-                                <input 
-                                  type="text" 
-                                  placeholder="New Tracking #" 
-                                  className="bg-transparent border-b border-slate-200 focus:border-indigo-500 outline-none px-1 py-0.5 text-xs w-32 transition-colors"
-                                  value={localTracking[p.id] || ''}
-                                  onChange={(e) => handleTrackingChange(p.id, e.target.value)}
-                                />
-                              )}
-                              {p.trackingHistory && p.trackingHistory.length > 0 && (
-                                <button 
-                                  onClick={() => setExpandedHistory(expandedHistory === p.id ? null : p.id)}
-                                  className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 uppercase flex items-center gap-1"
-                                >
-                                  History ({p.trackingHistory.length})
-                                  <svg className={`w-3 h-3 transition-transform ${expandedHistory === p.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            {p.status !== 'Delivered' && (
-                              <>
-                                <button 
-                                  onClick={() => handleMarkAsShipped(p)}
-                                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all"
-                                >
-                                  {p.status === 'Shipped' ? 'Update Tracking' : 'Mark as Shipped'}
-                                </button>
-                                <button 
-                                  onClick={() => handleMarkAsDelivered(p)}
-                                  className="text-xs font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-all"
-                                >
-                                  Mark as Delivered
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedHistory === p.id && p.trackingHistory && (
-                        <tr className="bg-slate-50/50">
-                          <td colSpan={6} className="px-8 py-4">
-                            <div className="space-y-2 border-l-2 border-indigo-200 pl-4">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Shipment History</h4>
-                              {p.trackingHistory.map((entry, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                                    <span className="font-mono text-slate-700">{entry.number}</span>
-                                  </div>
-                                  <span className="text-slate-400">{entry.date}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                  {filteredProducts.length === 0 && (
+           <div className="bg-slate-900 text-white p-8 rounded-[32px] shadow-xl space-y-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
+              <h3 className="text-xl font-bold relative z-10">Commission Ledger</h3>
+              <div className="space-y-6 relative z-10">
+                 <div>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-2">Platform Contribution</p>
+                    <div className="flex items-center gap-4">
+                       <div className="flex-grow h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400" style={{ width: `${platformCutPercent}%` }}></div>
+                       </div>
+                       <span className="font-black text-indigo-400">{platformCutPercent}%</span>
+                    </div>
+                 </div>
+                 <div className="pt-6 border-t border-white/10 space-y-4">
+                    <div className="flex justify-between items-center">
+                       <span className="text-sm text-slate-400 font-medium">System Fees</span>
+                       <span className="font-bold">-${platformCut.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-lg">
+                       <span className="font-bold text-slate-100">Net Artisan Payout</span>
+                       <span className="font-black text-emerald-400">${netEarnings.toFixed(2)}</span>
+                    </div>
+                 </div>
+                 <button className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-colors">
+                    View Tax Documents
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {activeTab === 'inventory' && (
+        <div className="space-y-6">
+           <div className="flex justify-between items-center">
+             <div className="flex gap-2">
+                {(['All', 'Active', 'Shipped'] as const).map(f => (
+                  <button key={f} onClick={() => setStatusFilter(f)} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${statusFilter === f ? 'bg-slate-900 text-white' : 'bg-white border text-slate-500 hover:bg-slate-50'}`}>{f}</button>
+                ))}
+             </div>
+             <button onClick={() => setShowAddForm(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-100">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                New Listing
+             </button>
+           </div>
+
+           {showAddForm && (
+              <div className="bg-white p-8 rounded-[32px] border border-indigo-100 shadow-xl space-y-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Item Name</label>
+                       <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={newProduct.name} onChange={e => setNewProduct(p=>({...p, name: e.target.value}))} />
+                    </div>
+                    <div>
+                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Price ($)</label>
+                       <input type="number" className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={newProduct.price} onChange={e => setNewProduct(p=>({...p, price: Number(e.target.value)}))} />
+                    </div>
+                    <div>
+                       <div className="flex justify-between items-center mb-2">
+                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Description</label>
+                          <button type="button" onClick={handleEnhance} disabled={isEnhancing} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:opacity-50">
+                             {isEnhancing ? 'Warping...' : '✨ AI Enhance'}
+                          </button>
+                       </div>
+                       <textarea rows={1} className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={newProduct.description} onChange={e => setNewProduct(p=>({...p, description: e.target.value}))} />
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <button onClick={() => setShowAddForm(false)} className="px-8 py-3 font-bold text-slate-400">Cancel</button>
+                    <button onClick={handleAddProductSubmit} className="flex-grow bg-slate-900 text-white py-3 rounded-xl font-bold">Publish to Marketplace</button>
+                 </div>
+              </div>
+           )}
+
+           <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+              <table className="w-full">
+                 <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] border-b">
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
-                        {statusFilter === 'All' ? 'No products listed yet.' : `No products currently in ${statusFilter} status.`}
-                      </td>
+                       <th className="px-8 py-5 text-left">Asset</th>
+                       <th className="px-8 py-5 text-left">Fulfillment Status</th>
+                       <th className="px-8 py-5 text-left">Revenue</th>
+                       <th className="px-8 py-5 text-right">Actions</th>
                     </tr>
-                  )}
-                </tbody>
+                 </thead>
+                 <tbody className="divide-y">
+                    {products.filter(p => statusFilter === 'All' || p.status === statusFilter).map(p => (
+                       <tr key={p.id} className="hover:bg-slate-50/50 group transition-colors">
+                          <td className="px-8 py-6">
+                             <div className="flex items-center gap-4">
+                                <img src={p.image} className="w-12 h-12 rounded-xl object-cover border" alt="" />
+                                <div>
+                                   <p className="font-bold text-slate-900">{p.name}</p>
+                                   <p className="text-xs text-slate-400">{p.category}</p>
+                                </div>
+                             </div>
+                          </td>
+                          <td className="px-8 py-6">
+                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${p.status === 'Shipped' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                                {p.status || 'Active'}
+                             </span>
+                          </td>
+                          <td className="px-8 py-6 font-bold text-slate-900">${p.price}</td>
+                          <td className="px-8 py-6 text-right">
+                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => handleGenerateVideo(p)} className="p-2 hover:bg-white border rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="Generate AI Promo Video">
+                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                </button>
+                                <button className="p-2 hover:bg-white border rounded-lg text-slate-400 hover:text-indigo-600 transition-colors">
+                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button onClick={() => handleMarkAsShipped(p)} className="px-4 py-2 bg-slate-100 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-600 hover:text-white transition-all">Mark Shipped</button>
+                             </div>
+                          </td>
+                       </tr>
+                    ))}
+                 </tbody>
               </table>
-            </div>
-          </div>
-        </>
+           </div>
+        </div>
       )}
 
       {activeTab === 'settings' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
-          {/* Sidebar / Preview */}
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm text-center">
-              <div className="relative inline-block mb-4">
-                <div className="w-32 h-32 rounded-full border-4 border-indigo-50 mx-auto overflow-hidden bg-slate-100 flex items-center justify-center">
-                  <img 
-                    src={profileForm.storeLogo || profileForm.avatar || 'https://via.placeholder.com/150'} 
-                    className="w-full h-full object-cover" 
-                    alt="Store Logo" 
-                  />
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 bg-indigo-600 p-2 rounded-full shadow-lg border border-white cursor-pointer hover:bg-indigo-700 text-white transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                </button>
-                <input 
-                  type="file" 
-                  ref={fileInputRef}
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           <div className="lg:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm space-y-8">
+              <div className="flex justify-between items-center">
+                 <h3 className="text-2xl font-black">Brand Identity</h3>
+                 <button onClick={handleBrandStoryAI} disabled={isBranding} className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-2">
+                    {isBranding ? 'Consulting Gemini...' : '✨ Rewrite with AI'}
+                 </button>
               </div>
-              <h3 className="text-xl font-bold text-slate-900">{profileForm.storeName || 'New Store'}</h3>
-              <p className="text-sm text-slate-500 mb-4">{profileForm.businessType || 'Artisan Vendor'}</p>
-              <div className="flex justify-center gap-2">
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">Verified Seller</span>
+              <div className="space-y-6">
+                 <div className="grid grid-cols-2 gap-6">
+                    <div>
+                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Store Name</label>
+                       <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={profileForm.storeName} onChange={e => setProfileForm({...profileForm, storeName: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Tagline</label>
+                       <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={profileForm.bio} onChange={e => setProfileForm({...profileForm, bio: e.target.value})} />
+                    </div>
+                 </div>
+                 <div>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Artisan Story (Public Profile)</label>
+                    <textarea rows={8} className="w-full p-6 bg-slate-50 border rounded-[32px] outline-none font-serif leading-relaxed" value={profileForm.longDescription} onChange={e => setProfileForm({...profileForm, longDescription: e.target.value})} />
+                 </div>
+                 <button onClick={() => { onUpdateUser(profileForm); alert("Profile Synced!"); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-xl transition-all">Save Brand Identity</button>
               </div>
-            </div>
+           </div>
 
-            <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-lg">
-              <h4 className="font-bold mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /></svg>
-                Marketplace Compliance
-              </h4>
-              <p className="text-sm text-slate-400 mb-4">Your business structure and contact information are required for automated payouts via Stripe.</p>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between">
-                  <span>ID Verification</span>
-                  <span className="text-green-400">Complete</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tax ID (ABN/VAT)</span>
-                  <span className="text-green-400">Provided</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Payout Schedule</span>
-                  <span className="text-indigo-400">Weekly</span>
-                </div>
+           <div className="space-y-8">
+              <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+                 <h4 className="font-bold mb-4">Commission Config</h4>
+                 <p className="text-xs text-slate-400 mb-6 leading-relaxed">Adjust your marketplace contribution. This affects all real-time payout calculations.</p>
+                 <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 text-center">
+                    <input type="range" min="0" max="30" className="w-full accent-indigo-600" value={profileForm.commissionRate} onChange={e => setProfileForm({...profileForm, commissionRate: Number(e.target.value)})} />
+                    <p className="mt-4 text-3xl font-black text-indigo-600">{profileForm.commissionRate}%</p>
+                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Form */}
-          <div className="lg:col-span-2">
-            <form onSubmit={handleProfileSubmit} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-8">
-              <section>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
-                    General Information
-                  </h3>
-                  <button 
-                    type="button"
-                    onClick={onPreviewPolicy}
-                    className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
-                  >
-                    Preview Marketplace Policy
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Store Name</label>
-                    <input 
-                      type="text" 
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.storeName}
-                      onChange={e => setProfileForm({ ...profileForm, storeName: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Business Type</label>
-                    <select 
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                      value={profileForm.businessType}
-                      onChange={e => setProfileForm({ ...profileForm, businessType: e.target.value })}
-                    >
-                      <option value="Sole Trader">Sole Trader</option>
-                      <option value="Limited Company">Limited Company / LLC</option>
-                      <option value="Non-Profit">Non-Profit / Charity</option>
-                      <option value="Artisan Collective">Artisan Collective</option>
-                    </select>
-                  </div>
-                </div>
-                
-                {/* Commission Setting Field */}
-                <div className="mb-6 p-6 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
-                  <label className="block text-sm font-black text-slate-900 mb-2 uppercase tracking-tight">Platform Commission Rate (%)</label>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    <div className="relative">
-                      <input 
-                        type="number" 
-                        min="0" max="50" step="1"
-                        className="w-24 px-4 py-3 rounded-xl border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600"
-                        value={profileForm.commissionRate || 10}
-                        onChange={e => setProfileForm({ ...profileForm, commissionRate: Number(e.target.value) })}
-                      />
-                      <span className="absolute right-3 top-3.5 text-slate-400 font-bold">%</span>
-                    </div>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Adjust your contribution to the platform infrastructure. This rate is reflected in your <strong>Marketplace Policy</strong> document and impacts your net payouts automatically at checkout.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Tagline / Short Bio</label>
-                  <input 
-                    type="text"
-                    placeholder="Briefly summarize your brand..."
-                    className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={profileForm.bio || ''}
-                    onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Detailed Store Story (Rich Text Support)</label>
-                  <div className="border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-                    <div className="bg-slate-50 border-b px-4 py-2 flex items-center justify-between">
-                      <div className="flex gap-4">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Story Editor</span>
-                        <div className="flex gap-3 items-center border-l pl-4">
-                          <button type="button" className="text-xs font-bold text-slate-600 hover:text-indigo-600 p-1 rounded hover:bg-white transition-colors">B</button>
-                          <button type="button" className="text-xs italic font-serif text-slate-600 hover:text-indigo-600 p-1 rounded hover:bg-white transition-colors">I</button>
-                          <button type="button" className="text-xs font-bold text-slate-600 hover:text-indigo-600 p-1 rounded hover:bg-white transition-colors flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
-                            List
-                          </button>
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-slate-400 pr-4">Characters: {profileForm.longDescription?.length || 0}</span>
-                    </div>
-                    <textarea 
-                      rows={8}
-                      placeholder="Share your detailed artisanal journey, process, and brand values..."
-                      className="w-full px-4 py-4 outline-none resize-none min-h-[250px] leading-relaxed font-serif"
-                      value={profileForm.longDescription || ''}
-                      onChange={e => setProfileForm({ ...profileForm, longDescription: e.target.value })}
-                    />
-                  </div>
-                  <p className="mt-2 text-[10px] text-slate-400">This story is featured prominently on your public profile right below the header.</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
-                  Shipping & Delivery
-                </h3>
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Estimated Delivery Time</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g., 3-5 business days"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.estimatedDelivery || ''}
-                      onChange={e => setProfileForm({ ...profileForm, estimatedDelivery: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Shipping Policy</label>
-                    <textarea 
-                      rows={4}
-                      placeholder="Explain your shipping methods, international options, and return terms..."
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.shippingPolicy || ''}
-                      onChange={e => setProfileForm({ ...profileForm, shippingPolicy: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
-                  Contact & Location
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Business Email</label>
-                    <input 
-                      type="email" 
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.email}
-                      onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Contact Phone</label>
-                    <input 
-                      type="tel" 
-                      placeholder="+1 (555) 000-0000"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.contactPhone || ''}
-                      onChange={e => setProfileForm({ ...profileForm, contactPhone: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Business Address</label>
-                  <textarea 
-                    rows={2}
-                    placeholder="Physical location for shipping returns..."
-                    className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={profileForm.businessAddress || ''}
-                    onChange={e => setProfileForm({ ...profileForm, businessAddress: e.target.value })}
-                  />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
-                  Social & Brand
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Instagram Handle</label>
-                    <div className="flex">
-                      <span className="bg-slate-100 border border-r-0 px-3 py-3 rounded-l-xl text-slate-500">@</span>
-                      <input 
-                        type="text" 
-                        placeholder="yourhandle"
-                        className="w-full px-4 py-3 rounded-r-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={profileForm.socialLinks?.instagram || ''}
-                        onChange={e => setProfileForm({ 
-                          ...profileForm, 
-                          socialLinks: { ...(profileForm.socialLinks || {}), instagram: e.target.value } 
-                        })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Facebook Handle</label>
-                    <div className="flex">
-                      <span className="bg-slate-100 border border-r-0 px-3 py-3 rounded-l-xl text-slate-500">fb/</span>
-                      <input 
-                        type="text" 
-                        placeholder="yourpage"
-                        className="w-full px-4 py-3 rounded-r-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={profileForm.socialLinks?.facebook || ''}
-                        onChange={e => setProfileForm({ 
-                          ...profileForm, 
-                          socialLinks: { ...(profileForm.socialLinks || {}), facebook: e.target.value } 
-                        })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">LinkedIn Profile URL</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://linkedin.com/in/..."
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.socialLinks?.linkedin || ''}
-                      onChange={e => setProfileForm({ 
-                        ...profileForm, 
-                        socialLinks: { ...(profileForm.socialLinks || {}), linkedin: e.target.value } 
-                      })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Portfolio/Website</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://yourwebsite.com"
-                      className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={profileForm.socialLinks?.website || ''}
-                      onChange={e => setProfileForm({ 
-                        ...profileForm, 
-                        socialLinks: { ...(profileForm.socialLinks || {}), website: e.target.value } 
-                      })}
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <div className="pt-8 border-t flex justify-end gap-4">
-                <button 
-                  type="button" 
-                  onClick={() => setProfileForm({ ...user })}
-                  className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50"
-                >
-                  Reset
-                </button>
-                <button 
-                  type="submit" 
-                  className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-                >
-                  Save Store Profile
-                </button>
+              <div className="bg-emerald-600 text-white p-8 rounded-[32px] shadow-xl">
+                 <h4 className="font-bold mb-2">Artisan Status</h4>
+                 <div className="flex items-center gap-2 mb-6">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    <span className="text-xs font-bold uppercase tracking-widest">Store Live & Verified</span>
+                 </div>
+                 <p className="text-sm text-emerald-100 leading-relaxed mb-6">Your store is currently visible to the global marketplace. All sales are protected by Velo Guarantee.</p>
+                 <button className="w-full py-3 bg-white/10 border border-white/20 rounded-xl text-xs font-bold hover:bg-white/20">Manage Stripe Account</button>
               </div>
-            </form>
-          </div>
+           </div>
         </div>
       )}
     </div>
