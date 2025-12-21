@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Product, CartItem, Order, View } from './types';
 import { ApiService } from './services/api';
+import { CURRENT_CONFIG } from './config';
 import Navbar from './components/Navbar';
 import ProductGrid from './components/ProductGrid';
 import ProductDetail from './components/ProductDetail';
@@ -21,13 +22,13 @@ const App: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   
-  // App-wide Status
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
 
-  // Initial Data Load
+  const primaryColor = CURRENT_CONFIG.primaryColor;
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -104,7 +105,7 @@ const App: React.FC = () => {
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
-      const effectiveRate = currentUser?.id === product.vendorId ? (currentUser.commissionRate || 10) : 10;
+      const effectiveRate = currentUser?.id === product.vendorId ? (currentUser.commissionRate || CURRENT_CONFIG.defaultCommission) : CURRENT_CONFIG.defaultCommission;
       const productWithRate = { ...product, commissionRate: effectiveRate };
 
       if (existing) {
@@ -130,7 +131,6 @@ const App: React.FC = () => {
       setCart([]);
       navigate('home');
       showNotification("Order placed successfully!", 'success');
-      // Refresh products to show updated stock
       const prodList = await ApiService.getProducts();
       setProducts(prodList);
     } catch (err) {
@@ -169,7 +169,7 @@ const App: React.FC = () => {
       shippingPolicy: "Standard artisanal shipping applies.",
       estimatedDelivery: "4-7 Business Days",
       processingTime: "2-3 Days",
-      commissionRate: 10
+      commissionRate: CURRENT_CONFIG.defaultCommission
     } as User;
   }, [selectedVendorId, currentUser, products]);
 
@@ -181,10 +181,10 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-6">
-        <div className="w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div className={`w-16 h-16 border-4 border-slate-200 border-t-${primaryColor}-600 rounded-full animate-spin`}></div>
         <div className="text-center">
-          <p className="text-2xl font-black text-slate-900 tracking-tighter">Syncing VeloMarket...</p>
-          <p className="text-slate-400 font-medium text-sm mt-1 uppercase tracking-widest">Secure Handcrafted Network</p>
+          <p className="text-2xl font-black text-slate-900 tracking-tighter">Syncing {CURRENT_CONFIG.name}...</p>
+          <p className="text-slate-400 font-medium text-sm mt-1 uppercase tracking-widest">Secure Network</p>
         </div>
       </div>
     );
@@ -195,9 +195,9 @@ const App: React.FC = () => {
       {notification && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-10 duration-300">
           <div className={`px-6 py-3 rounded-full shadow-2xl border flex items-center gap-3 font-bold text-sm ${
-            notification.type === 'success' ? 'bg-emerald-900 text-emerald-50 border-emerald-800' : 'bg-indigo-900 text-indigo-50 border-indigo-800'
+            notification.type === 'success' ? 'bg-emerald-900 text-emerald-50 border-emerald-800' : `bg-${primaryColor}-900 text-${primaryColor}-50 border-${primaryColor}-800`
           }`}>
-            <div className={`w-2 h-2 rounded-full animate-pulse ${notification.type === 'success' ? 'bg-emerald-400' : 'bg-indigo-400'}`}></div>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${notification.type === 'success' ? 'bg-emerald-400' : `bg-${primaryColor}-400`}`}></div>
             {notification.message}
           </div>
         </div>
@@ -214,14 +214,16 @@ const App: React.FC = () => {
       <main className="flex-grow container mx-auto px-4 py-8">
         {currentView === 'home' && (
           <div className="space-y-12">
-            <header className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white p-12 rounded-[40px] text-center relative overflow-hidden shadow-2xl">
+            <header className={`bg-gradient-to-r from-slate-900 to-${primaryColor}-900 text-white p-12 rounded-[40px] text-center relative overflow-hidden shadow-2xl`}>
                <div className="relative z-10">
-                <h1 className="text-6xl font-black mb-4 tracking-tighter">Artisanal Excellence, <span className="text-indigo-400">Directly Shared.</span></h1>
+                <h1 className="text-6xl font-black mb-4 tracking-tighter">
+                  {CURRENT_CONFIG.brandName}<span className={`text-${primaryColor}-400`}>MARKET</span>
+                </h1>
                 <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto font-medium">
-                  A high-performance marketplace connecting global creators with collectors.
+                  {CURRENT_CONFIG.tagline}
                 </p>
                 <div className="flex justify-center gap-4">
-                  <button onClick={() => navigate('browse')} className="bg-indigo-500 hover:bg-indigo-600 px-10 py-4 rounded-full font-black text-lg transition-all shadow-lg transform hover:scale-105 active:scale-95">Explore Collection</button>
+                  <button onClick={() => navigate('browse')} className={`bg-${primaryColor}-500 hover:bg-${primaryColor}-600 px-10 py-4 rounded-full font-black text-lg transition-all shadow-lg transform hover:scale-105 active:scale-95`}>Explore Collection</button>
                   <button onClick={() => navigate('manual')} className="bg-white/10 hover:bg-white/20 backdrop-blur px-10 py-4 rounded-full font-black text-lg transition-all border border-white/20">How it Works</button>
                 </div>
                </div>
@@ -234,12 +236,12 @@ const App: React.FC = () => {
               <div className="flex justify-between items-end mb-8">
                 <div>
                   <h2 className="text-3xl font-black text-slate-900 flex items-center gap-2">
-                    <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
+                    <span className={`w-2 h-8 bg-${primaryColor}-500 rounded-full`}></span>
                     Handpicked for You
                   </h2>
                   <p className="text-slate-500 font-medium">Discover the latest creations from our master artisans.</p>
                 </div>
-                <button onClick={() => navigate('browse')} className="text-indigo-600 font-black text-sm uppercase tracking-widest hover:underline">View All Collection →</button>
+                <button onClick={() => navigate('browse')} className={`text-${primaryColor}-600 font-black text-sm uppercase tracking-widest hover:underline`}>View All Collection →</button>
               </div>
               <ProductGrid 
                 products={products.slice(0, 4)} 
@@ -256,7 +258,7 @@ const App: React.FC = () => {
               <div className="flex flex-col md:flex-row gap-6 justify-between items-center">
                 <div className="flex-1 w-full">
                    <h2 className="text-3xl font-black text-slate-900 mb-2">Discovery Hub</h2>
-                   <p className="text-slate-500 font-medium">Browse through {products.length} unique artisanal items.</p>
+                   <p className="text-slate-500 font-medium">Browse through {products.length} unique items.</p>
                 </div>
                 <div className="flex flex-wrap gap-4 w-full md:w-auto">
                   <div className="relative flex-grow md:min-w-[300px]">
@@ -264,7 +266,7 @@ const App: React.FC = () => {
                     <input 
                       type="text" 
                       placeholder="Search items, vendors, or stories..."
-                      className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                      className={`w-full pl-10 pr-4 py-3 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-${primaryColor}-500 transition-all font-medium`}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -279,7 +281,7 @@ const App: React.FC = () => {
                     onClick={() => setSelectedCategory(cat)}
                     className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                       selectedCategory === cat 
-                        ? 'bg-indigo-600 text-white shadow-lg' 
+                        ? `bg-${primaryColor}-600 text-white shadow-lg` 
                         : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     }`}
                   >
@@ -302,7 +304,7 @@ const App: React.FC = () => {
                  </div>
                  <h3 className="text-xl font-bold text-slate-900">No treasures found</h3>
                  <p className="text-slate-500 max-w-xs mx-auto mt-2">Try adjusting your filters.</p>
-                 <button onClick={() => {setSearchQuery(''); setSelectedCategory('All');}} className="mt-6 text-indigo-600 font-black text-sm uppercase tracking-widest hover:underline">Clear all filters</button>
+                 <button onClick={() => {setSearchQuery(''); setSelectedCategory('All');}} className={`mt-6 text-${primaryColor}-600 font-black text-sm uppercase tracking-widest hover:underline`}>Clear all filters</button>
               </div>
             )}
           </section>

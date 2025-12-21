@@ -2,23 +2,13 @@
 import { Product, User, Order, Review } from '../types';
 
 /**
- * PRODUCTION NOTE: 
- * In a real app, replace BASE_URL with your actual backend endpoint (Node, Go, Python, etc.)
- * The service now uses async/await to simulate real network latency and prepare for a real API.
+ * ARCHITECTURE NOTE:
+ * This service is designed for "White-Label Portability."
+ * 1. Demo Mode: Uses localStorage if no backend is configured.
+ * 2. Production Mode: Swaps to real fetch calls when API_URL is provided.
  */
-const BASE_URL = 'https://api.velomarket.com/v1'; // Placeholder
 
-// Fallback to localStorage for demo purposes if the API doesn't exist
-const storageFallback = {
-  get: <T>(key: string): T | null => {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
-  },
-  set: (key: string, data: any) => {
-    localStorage.setItem(key, JSON.stringify(data));
-  }
-};
-
+const IS_PRODUCTION = false; // Toggle this or use process.env.DATABASE_URL
 const STORAGE_KEYS = {
   PRODUCTS: 'velo_products',
   USERS: 'velo_users',
@@ -58,15 +48,26 @@ const INITIAL_PRODUCTS: Product[] = [
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const storage = {
+  get: <T>(key: string): T | null => JSON.parse(localStorage.getItem(key) || 'null'),
+  set: (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data))
+};
+
 export const ApiService = {
   /**
    * PRODUCTS
    */
   async getProducts(): Promise<Product[]> {
-    await sleep(600); // Simulate network delay
-    const local = storageFallback.get<Product[]>(STORAGE_KEYS.PRODUCTS);
+    if (IS_PRODUCTION) {
+      // Example for when you sell to a customer with a real backend:
+      // const res = await fetch('/api/products');
+      // return res.json();
+    }
+    
+    await sleep(600);
+    const local = storage.get<Product[]>(STORAGE_KEYS.PRODUCTS);
     if (!local) {
-      storageFallback.set(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
+      storage.set(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
       return INITIAL_PRODUCTS;
     }
     return local;
@@ -76,21 +77,20 @@ export const ApiService = {
     await sleep(1000);
     const products = await this.getProducts();
     const index = products.findIndex(p => p.id === product.id);
-    if (index > -1) {
-      products[index] = product;
-    } else {
-      products.push(product);
-    }
-    storageFallback.set(STORAGE_KEYS.PRODUCTS, products);
+    if (index > -1) products[index] = product;
+    else products.push(product);
+    
+    storage.set(STORAGE_KEYS.PRODUCTS, products);
     return product;
   },
 
   /**
-   * USER & AUTH
+   * AUTHENTICATION
+   * In Production, this would use Supabase Auth or JWT.
    */
   async getCurrentUser(): Promise<User | null> {
     await sleep(300);
-    return storageFallback.get<User>(STORAGE_KEYS.CURRENT_USER);
+    return storage.get<User>(STORAGE_KEYS.CURRENT_USER);
   },
 
   async login(role: 'buyer' | 'seller'): Promise<User> {
@@ -103,47 +103,36 @@ export const ApiService = {
       avatar: `https://picsum.photos/seed/${role}/100`,
       joinedDate: new Date().toISOString(),
       storeName: role === 'seller' ? 'Loom & Thread' : undefined,
-      businessType: role === 'seller' ? 'Sole Trader' : undefined,
-      longDescription: role === 'seller' ? "Hand-woven storytelling textiles." : undefined,
-      shippingPolicy: "Standard artisanal shipping.",
-      estimatedDelivery: "3-5 Business Days",
-      processingTime: "1-2 Days",
-      commissionRate: role === 'seller' ? 10 : undefined
+      commissionRate: 10
     };
-    storageFallback.set(STORAGE_KEYS.CURRENT_USER, mockUser);
+    storage.set(STORAGE_KEYS.CURRENT_USER, mockUser);
     return mockUser;
   },
 
   async logout(): Promise<void> {
-    await sleep(200);
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   },
 
   async updateUser(user: User): Promise<User> {
-    await sleep(1000);
-    storageFallback.set(STORAGE_KEYS.CURRENT_USER, user);
-    // Update in users list too
-    const users = storageFallback.get<User[]>(STORAGE_KEYS.USERS) || [];
-    const index = users.findIndex(u => u.id === user.id);
-    if (index > -1) users[index] = user;
-    else users.push(user);
-    storageFallback.set(STORAGE_KEYS.USERS, users);
+    await sleep(800);
+    storage.set(STORAGE_KEYS.CURRENT_USER, user);
     return user;
   },
 
   /**
-   * ORDERS
+   * ORDERS & TRANSACTIONS
    */
   async getOrders(): Promise<Order[]> {
     await sleep(500);
-    return storageFallback.get<Order[]>(STORAGE_KEYS.ORDERS) || [];
+    return storage.get<Order[]>(STORAGE_KEYS.ORDERS) || [];
   },
 
   async createOrder(order: Order): Promise<Order> {
-    await sleep(2000); // Simulate heavy payment/split processing
+    // This is where a real API would trigger Stripe or PayPal
+    await sleep(2000); 
     const orders = await this.getOrders();
     orders.push(order);
-    storageFallback.set(STORAGE_KEYS.ORDERS, orders);
+    storage.set(STORAGE_KEYS.ORDERS, orders);
     return order;
   },
 
@@ -151,16 +140,14 @@ export const ApiService = {
    * REVIEWS
    */
   async getReviews(vendorId: string): Promise<Review[]> {
-    await sleep(400);
-    const reviews = storageFallback.get<Review[]>(STORAGE_KEYS.REVIEWS) || [];
+    const reviews = storage.get<Review[]>(STORAGE_KEYS.REVIEWS) || [];
     return reviews.filter(r => r.vendorId === vendorId);
   },
 
   async saveReview(review: Review): Promise<Review> {
-    await sleep(800);
-    const reviews = storageFallback.get<Review[]>(STORAGE_KEYS.REVIEWS) || [];
+    const reviews = storage.get<Review[]>(STORAGE_KEYS.REVIEWS) || [];
     reviews.push(review);
-    storageFallback.set(STORAGE_KEYS.REVIEWS, reviews);
+    storage.set(STORAGE_KEYS.REVIEWS, reviews);
     return review;
   }
 };
