@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User, View } from '../types';
-import { CURRENT_CONFIG } from '../config';
+import { StorageService } from '../services/storage';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -12,39 +12,44 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ currentUser, cartCount, onNavigate, onLogin, onLogout }) => {
-  const color = CURRENT_CONFIG.primaryColor;
+  const isDemo = StorageService.isUsingFallback();
 
   return (
     <nav className="bg-white border-b sticky top-0 z-50">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <div 
-          className="text-2xl font-black text-slate-900 cursor-pointer flex items-center gap-2"
-          onClick={() => onNavigate('home')}
-        >
-          <div className={`w-8 h-8 bg-${color}-600 rounded-lg flex items-center justify-center text-white text-sm`}>
-            {CURRENT_CONFIG.logoText}
+        <div className="flex items-center gap-3">
+          <div 
+            className="text-2xl font-black text-slate-900 cursor-pointer flex items-center gap-2"
+            onClick={() => onNavigate('home')}
+          >
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm">V</div>
+            VELO<span className="text-indigo-600">MARKET</span>
           </div>
-          {CURRENT_CONFIG.brandName}<span className={`text-${color}-600`}>MARKET</span>
+          {isDemo && (
+            <span className="hidden sm:inline-block bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border border-slate-200">
+              Local DB
+            </span>
+          )}
         </div>
 
         <div className="hidden md:flex items-center space-x-8 text-sm font-medium">
-          <button onClick={() => onNavigate('home')} className={`hover:text-${color}-600`}>Home</button>
-          <button onClick={() => onNavigate('browse')} className={`hover:text-${color}-600`}>Browse</button>
+          <button onClick={() => onNavigate('home')} className="hover:text-indigo-600">Home</button>
+          <button onClick={() => onNavigate('browse')} className="hover:text-indigo-600">Browse</button>
           {currentUser?.role === 'seller' && (
-            <button onClick={() => onNavigate('dashboard')} className={`hover:text-${color}-600`}>Seller Dashboard</button>
+            <button onClick={() => onNavigate('dashboard')} className="hover:text-indigo-600">Dashboard</button>
           )}
         </div>
 
         <div className="flex items-center space-x-4">
           <button 
             onClick={() => onNavigate('cart')}
-            className={`relative p-2 text-slate-600 hover:text-${color}-600 transition-colors`}
+            className="relative p-2 text-slate-600 hover:text-indigo-600 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
             {cartCount > 0 && (
-              <span className={`absolute top-0 right-0 bg-${color}-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-white`}>
+              <span className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-white">
                 {cartCount}
               </span>
             )}
@@ -78,9 +83,9 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, cartCount, onNavigate, onL
               </button>
               <button 
                 onClick={() => onLogin('seller')}
-                className="text-sm font-semibold px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all"
+                className="text-sm font-semibold px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all shadow-sm"
               >
-                Become a Seller
+                Sell on Velo
               </button>
             </div>
           )}

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Product } from '../types';
 
 interface ProductGridProps {
@@ -9,23 +9,12 @@ interface ProductGridProps {
 }
 
 const ProductGrid: React.FC<ProductGridProps> = ({ products, onProductClick, onAddToCart }) => {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const handleShare = (e: React.MouseEvent, product: Product) => {
-    e.stopPropagation();
-    const url = `${window.location.origin}/#product/${product.id}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(product.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    });
-  };
-
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {products.map((product) => (
         <div 
           key={product.id} 
-          className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer relative"
+          className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer"
           onClick={() => onProductClick(product)}
         >
           <div className="aspect-[4/3] overflow-hidden relative">
@@ -37,30 +26,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onProductClick, onA
             <div className="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-slate-600">
               {product.category}
             </div>
-            
-            {/* Quick Share Button */}
-            <button 
-              onClick={(e) => handleShare(e, product)}
-              className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md border transition-all duration-300 z-10 ${
-                copiedId === product.id 
-                  ? 'bg-emerald-500 border-emerald-400 text-white' 
-                  : 'bg-white/40 border-white/20 text-slate-900 hover:bg-white/80 opacity-0 group-hover:opacity-100'
-              }`}
-              title="Copy link to product"
-            >
-              {copiedId === product.id ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 100-2.684 3 3 0 000 2.684zm0 12.684a3 3 0 100-2.684 3 3 0 000 2.684z" />
-                </svg>
-              )}
-              {copiedId === product.id && (
-                <span className="absolute -bottom-8 right-0 bg-slate-900 text-white text-[10px] py-1 px-2 rounded whitespace-nowrap">Copied!</span>
-              )}
-            </button>
           </div>
           <div className="p-5">
             <div className="flex justify-between items-start mb-2">

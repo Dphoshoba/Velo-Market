@@ -37,7 +37,6 @@ export interface User {
   socialLinks?: SocialLinks;
   shippingPolicy?: string;
   estimatedDelivery?: string;
-  processingTime?: string; // Estimated time to prepare order
   commissionRate?: number; // Platform commission percentage
 }
 

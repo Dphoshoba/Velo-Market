@@ -1,146 +1,231 @@
-
 import { Product, User, Order, Review } from '../types';
+import { supabase } from './supabase';
 
-const STORAGE_KEYS = {
-  PRODUCTS: 'velo_products',
-  USERS: 'velo_users',
-  CURRENT_USER: 'velo_current_user',
-  ORDERS: 'velo_orders',
-  REVIEWS: 'velo_reviews',
+const TABLES = {
+  PRODUCTS: 'products',
+  PROFILES: 'profiles',
+  ORDERS: 'orders',
+  REVIEWS: 'reviews',
 };
 
-const INITIAL_PRODUCTS: Product[] = [
+const DEFAULT_MOCK_PRODUCTS: Product[] = [
   {
-    id: 'p1',
-    vendorId: 'v1',
-    vendorName: 'Loom & Thread',
-    name: 'Handwoven Wool Blanket',
-    description: 'A cozy, ethically sourced wool blanket for winter nights.',
-    price: 120,
+    id: 'seed-1',
+    vendorId: 'v-artisan-1',
+    vendorName: 'Terra Ceramics',
+    name: 'Minimalist Stone Pitcher',
+    description: 'A hand-thrown stoneware pitcher with a matte basalt glaze. Perfect for morning rituals.',
+    price: 85,
     category: 'Home Decor',
-    image: 'https://picsum.photos/seed/blanket/600/400',
+    image: 'https://images.unsplash.com/photo-1578749553370-4bc3b166441e?auto=format&fit=crop&q=80&w=800',
+    stock: 12,
+    rating: 4.9,
+    reviewsCount: 24,
+    commissionRate: 12
+  },
+  {
+    id: 'seed-2',
+    vendorId: 'v-artisan-2',
+    vendorName: 'Loom & Thread',
+    name: 'Organic Indigo Throw',
+    description: 'Hand-woven GOTS certified organic cotton throw, dyed with natural plant-based indigo.',
+    price: 145,
+    category: 'Home Decor',
+    image: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&q=80&w=800',
     stock: 5,
-    rating: 4.8,
-    reviewsCount: 12,
+    rating: 5.0,
+    reviewsCount: 18,
+    commissionRate: 10
   },
   {
-    id: 'p2',
-    vendorId: 'v2',
-    vendorName: 'Clay & Fire',
-    name: 'Ceramic Espresso Set',
-    description: 'Minimalist matte black ceramic set. Includes 2 cups and saucers.',
-    price: 45,
+    id: 'seed-3',
+    vendorId: 'v-artisan-3',
+    vendorName: 'Kiso Knives',
+    name: 'Hand-Forged Petty Knife',
+    description: 'Damascus steel utility knife with a charred oak handle. Masterfully balanced for precision.',
+    price: 210,
     category: 'Kitchen',
-    image: 'https://picsum.photos/seed/ceramic/600/400',
-    stock: 15,
-    rating: 4.5,
-    reviewsCount: 8,
-  },
-];
-
-const INITIAL_REVIEWS: Review[] = [
-  {
-    id: 'r1',
-    vendorId: 'v1',
-    productName: 'Handwoven Wool Blanket',
-    authorName: 'Emily R.',
-    rating: 5,
-    comment: 'Absolutely stunning quality. The weave is tight and the wool is incredibly soft. Worth every penny!',
-    date: '2023-11-15T10:00:00Z',
-    verified: true
+    image: 'https://images.unsplash.com/photo-1594212699903-ec8a3ecc50f6?auto=format&fit=crop&q=80&w=800',
+    stock: 3,
+    rating: 4.8,
+    reviewsCount: 42,
+    commissionRate: 15
   },
   {
-    id: 'r2',
-    vendorId: 'v1',
-    productName: 'Organic Cotton Scarf',
-    authorName: 'Michael B.',
-    rating: 4,
-    comment: 'Great scarf, though the color was slightly darker than in the photos. Still beautiful craftsmanship.',
-    date: '2023-12-05T14:30:00Z',
-    verified: true
-  },
-  {
-    id: 'r3',
-    vendorId: 'v2',
-    productName: 'Ceramic Espresso Set',
-    authorName: 'Sarah L.',
-    rating: 5,
-    comment: 'These cups are art. I use them every morning and they feel so balanced in the hand.',
-    date: '2024-01-20T09:15:00Z',
-    verified: true
+    id: 'seed-4',
+    vendorId: 'v-artisan-1',
+    vendorName: 'Terra Ceramics',
+    name: 'Ochre Serving Bowl',
+    description: 'Wide, shallow serving bowl with a rich ochre interior and raw clay exterior.',
+    price: 65,
+    category: 'Home Decor',
+    image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&q=80&w=800',
+    stock: 20,
+    rating: 4.7,
+    reviewsCount: 9,
+    commissionRate: 12
   }
 ];
 
-export const StorageService = {
-  getProducts: (): Product[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      return INITIAL_PRODUCTS;
+let useFallback = false;
+let connectionError: string | null = null;
+
+const localStore = {
+  get: (key: string) => {
+    const data = localStorage.getItem(`velo_fallback_${key}`);
+    const items = data ? JSON.parse(data) : [];
+    
+    // Seed default products if inventory is empty
+    if (key === TABLES.PRODUCTS && items.length === 0) {
+      localStorage.setItem(`velo_fallback_${key}`, JSON.stringify(DEFAULT_MOCK_PRODUCTS));
+      return DEFAULT_MOCK_PRODUCTS;
     }
-    return JSON.parse(data);
+    return items;
+  },
+  save: (key: string, item: any) => {
+    const items = localStore.get(key);
+    const existingIdx = items.findIndex((i: any) => i.id === item.id);
+    if (existingIdx > -1) {
+      items[existingIdx] = item;
+    } else {
+      items.push(item);
+    }
+    localStorage.setItem(`velo_fallback_${key}`, JSON.stringify(items));
+  },
+  clear: () => {
+    Object.values(TABLES).forEach(t => localStorage.removeItem(`velo_fallback_${t}`));
+    localStorage.removeItem('velo_current_user_cache');
+    window.location.reload();
+  }
+};
+
+export const StorageService = {
+  isUsingFallback: () => useFallback,
+  getConnectionError: () => connectionError,
+  resetDemo: () => localStore.clear(),
+
+  testConnection: async (): Promise<boolean> => {
+    try {
+      // If URL is default placeholder, skip the fetch attempt entirely to avoid TypeError console noise
+      if (supabase.supabaseUrl.includes('your-project-id')) {
+        throw new Error("Supabase URL not configured.");
+      }
+
+      const { error } = await supabase.from(TABLES.PRODUCTS).select('id').limit(1);
+      if (error) throw error;
+      
+      useFallback = false;
+      connectionError = null;
+      return true;
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      console.warn("VeloMarket: Database is unconfigured or unreachable. Switching to Sandbox Mode.");
+      
+      connectionError = msg.includes("fetch") || msg.includes("URL")
+        ? "Database unconfigured" 
+        : `Connection Error: ${msg}`;
+        
+      useFallback = true;
+      return false;
+    }
   },
 
-  saveProduct: (product: Product) => {
-    const products = StorageService.getProducts();
-    const index = products.findIndex(p => p.id === product.id);
-    if (index > -1) {
-      products[index] = product;
-    } else {
-      products.push(product);
+  getProducts: async (): Promise<Product[]> => {
+    if (useFallback) return localStore.get(TABLES.PRODUCTS);
+    try {
+      const { data, error } = await supabase.from(TABLES.PRODUCTS).select('*');
+      if (error) throw error;
+      return (data && data.length > 0) ? data : localStore.get(TABLES.PRODUCTS);
+    } catch (error) {
+      return localStore.get(TABLES.PRODUCTS);
     }
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  },
+
+  saveProduct: async (product: Product) => {
+    if (useFallback) return localStore.save(TABLES.PRODUCTS, product);
+    try {
+      const { error } = await supabase.from(TABLES.PRODUCTS).upsert(product);
+      if (error) throw error;
+    } catch (error) {
+      localStore.save(TABLES.PRODUCTS, product);
+    }
   },
 
   getCurrentUser: (): User | null => {
-    const data = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    const data = localStorage.getItem('velo_current_user_cache');
     return data ? JSON.parse(data) : null;
   },
 
   setCurrentUser: (user: User | null) => {
     if (user) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+      localStorage.setItem('velo_current_user_cache', JSON.stringify(user));
     } else {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+      localStorage.removeItem('velo_current_user_cache');
     }
   },
 
-  updateUser: (updatedUser: User) => {
+  updateUser: async (updatedUser: User) => {
     StorageService.setCurrentUser(updatedUser);
-    const usersData = localStorage.getItem(STORAGE_KEYS.USERS);
-    let users: User[] = usersData ? JSON.parse(usersData) : [];
-    const index = users.findIndex(u => u.id === updatedUser.id);
-    if (index > -1) {
-      users[index] = updatedUser;
-    } else {
-      users.push(updatedUser);
+    if (useFallback) return localStore.save(TABLES.PROFILES, updatedUser);
+    try {
+      const { error } = await supabase.from(TABLES.PROFILES).upsert(updatedUser);
+      if (error) throw error;
+    } catch (error) {
+      localStore.save(TABLES.PROFILES, updatedUser);
     }
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   },
 
-  getOrders: (): Order[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.ORDERS);
-    return data ? JSON.parse(data) : [];
-  },
-
-  saveOrder: (order: Order) => {
-    const orders = StorageService.getOrders();
-    orders.push(order);
-    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  },
-
-  getReviews: (): Review[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.REVIEWS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(INITIAL_REVIEWS));
-      return INITIAL_REVIEWS;
+  getOrders: async (userId: string): Promise<Order[]> => {
+    if (useFallback) {
+      const all = localStore.get(TABLES.ORDERS);
+      return all.filter((o: Order) => o.buyerId === userId);
     }
-    return JSON.parse(data);
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.ORDERS)
+        .select('*')
+        .eq('buyerId', userId);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      return [];
+    }
   },
 
-  saveReview: (review: Review) => {
-    const reviews = StorageService.getReviews();
-    reviews.push(review);
-    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
+  saveOrder: async (order: Order) => {
+    if (useFallback) return localStore.save(TABLES.ORDERS, order);
+    try {
+      const { error } = await supabase.from(TABLES.ORDERS).insert(order);
+      if (error) throw error;
+    } catch (error) {
+      localStore.save(TABLES.ORDERS, order);
+    }
+  },
+
+  getReviews: async (vendorId: string): Promise<Review[]> => {
+    if (useFallback) {
+      const all = localStore.get(TABLES.REVIEWS);
+      return all.filter((r: Review) => r.vendorId === vendorId);
+    }
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.REVIEWS)
+        .select('*')
+        .eq('vendorId', vendorId);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  saveReview: async (review: Review) => {
+    if (useFallback) return localStore.save(TABLES.REVIEWS, review);
+    try {
+      const { error } = await supabase.from(TABLES.REVIEWS).insert(review);
+      if (error) throw error;
+    } catch (error) {
+      localStore.save(TABLES.REVIEWS, review);
+    }
   }
 };

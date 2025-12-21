@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Product, CartItem, Order, View } from './types';
-import { ApiService } from './services/api';
-import { CURRENT_CONFIG } from './config';
+import { StorageService } from './services/storage';
 import Navbar from './components/Navbar';
 import ProductGrid from './components/ProductGrid';
 import ProductDetail from './components/ProductDetail';
 import SellerDashboard from './components/SellerDashboard';
+import SellerOnboarding from './components/SellerOnboarding';
 import VendorProfile from './components/VendorProfile';
 import Policies from './components/Policies';
 import UserManual from './components/UserManual';
@@ -21,99 +20,88 @@ const App: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const primaryColor = CURRENT_CONFIG.primaryColor;
+  const initApp = useCallback(async () => {
+    setLoading(true);
+    try {
+      const isLive = await StorageService.testConnection();
+      setIsDemoMode(!isLive);
+      setErrorMsg(StorageService.getConnectionError());
+      
+      const fetchedProducts = await StorageService.getProducts();
+      setProducts(fetchedProducts);
+      setCurrentUser(StorageService.getCurrentUser());
+    } catch (error: any) {
+      console.error("App initialization warning:", error);
+      setIsDemoMode(true);
+      setErrorMsg(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const [prodData, userData] = await Promise.all([
-          ApiService.getProducts(),
-          ApiService.getCurrentUser()
-        ]);
-        setProducts(prodData);
-        setCurrentUser(userData);
-      } catch (err) {
-        console.error("Failed to fetch initial data", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    init();
-  }, []);
+    initApp();
+  }, [initApp]);
 
   const navigate = useCallback((view: View) => {
     setCurrentView(view);
     window.scrollTo(0, 0);
   }, []);
 
-  const showNotification = (message: string, type: 'success' | 'info' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
+  const handleLogin = (role: 'buyer' | 'seller') => {
+    if (role === 'seller') {
+      navigate('seller-onboarding');
+      return;
+    }
+    const mockUser: User = {
+      id: 'b1',
+      name: 'John Doe',
+      email: 'john@example.com',
+      role: 'buyer',
+      avatar: `https://picsum.photos/seed/buyer/100`,
+      joinedDate: new Date().toISOString()
+    };
+    StorageService.updateUser(mockUser).catch(console.error);
+    setCurrentUser(mockUser);
   };
 
-  const handleLogin = async (role: 'buyer' | 'seller') => {
-    setIsLoading(true);
-    try {
-      const user = await ApiService.login(role);
-      setCurrentUser(user);
-      showNotification(`Welcome back, ${user.name}!`, 'info');
-    } catch (err) {
-      showNotification("Login failed. Please try again.", "info");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleOnboardingComplete = async (user: User) => {
+    await StorageService.updateUser(user);
+    setCurrentUser(user);
+    navigate('dashboard');
   };
 
-  const handleLogout = async () => {
-    setIsLoading(true);
-    try {
-      await ApiService.logout();
-      setCurrentUser(null);
-      navigate('home');
-      showNotification("Signed out successfully.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleLogout = () => {
+    StorageService.setCurrentUser(null);
+    setCurrentUser(null);
+    navigate('home');
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
-    try {
-      const saved = await ApiService.updateUser(updatedUser);
-      setCurrentUser(saved);
-      showNotification("Settings updated!");
-    } catch (err) {
-      showNotification("Update failed.", "info");
-    }
+    await StorageService.updateUser(updatedUser);
+    setCurrentUser(updatedUser);
   };
 
   const handleUpdateProduct = async (updatedProduct: Product) => {
-    try {
-      await ApiService.saveProduct(updatedProduct);
-      const updatedList = await ApiService.getProducts();
-      setProducts(updatedList);
-    } catch (err) {
-      showNotification("Failed to update product.");
-    }
+    await StorageService.saveProduct(updatedProduct);
+    const refreshed = await StorageService.getProducts();
+    setProducts(refreshed);
   };
 
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
-      const effectiveRate = currentUser?.id === product.vendorId ? (currentUser.commissionRate || CURRENT_CONFIG.defaultCommission) : CURRENT_CONFIG.defaultCommission;
+      const effectiveRate = product.commissionRate || 10;
       const productWithRate = { ...product, commissionRate: effectiveRate };
-
       if (existing) {
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { ...productWithRate, quantity: 1 }];
     });
-    showNotification(`Added ${product.name} to cart!`);
   };
 
   const removeFromCart = (productId: string) => {
@@ -126,50 +114,32 @@ const App: React.FC = () => {
   };
 
   const handleCheckoutSuccess = async (order: Order) => {
-    try {
-      await ApiService.createOrder(order);
-      setCart([]);
-      navigate('home');
-      showNotification("Order placed successfully!", 'success');
-      const prodList = await ApiService.getProducts();
-      setProducts(prodList);
-    } catch (err) {
-      showNotification("Checkout failed.", "info");
-    }
+    await StorageService.saveOrder(order);
+    setCart([]);
+    navigate('home');
+    alert(`Order placed successfully!`);
   };
-
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           p.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, searchQuery, selectedCategory]);
-
-  const categories = useMemo(() => {
-    return ['All', ...new Set(products.map(p => p.category))];
-  }, [products]);
 
   const selectedVendor = useMemo(() => {
     if (!selectedVendorId) return null;
     if (currentUser?.id === selectedVendorId) return currentUser;
+    
+    // Find vendor info from products if possible
+    const productByVendor = products.find(p => p.vendorId === selectedVendorId);
+    
     return {
       id: selectedVendorId,
-      name: 'Artisan Vendor',
-      storeName: products.find(p => p.vendorId === selectedVendorId)?.vendorName || 'Artisan Shop',
+      name: productByVendor?.vendorName || 'Artisan Vendor',
+      storeName: productByVendor?.vendorName || 'Artisan Shop',
       email: 'vendor@example.com',
       role: 'seller' as const,
       avatar: `https://picsum.photos/seed/${selectedVendorId}/100`,
       joinedDate: '2023-01-01T00:00:00.000Z',
       businessType: 'Artisan Collective',
-      contactPhone: '+1 (234) 567-8900',
-      businessAddress: '123 Artisan Way,\nCraft City, CA 90210',
-      longDescription: "Our collective was founded on the idea that artisans deserve a global stage.",
+      longDescription: "Curated pieces from masters of their craft.",
       shippingPolicy: "Standard artisanal shipping applies.",
       estimatedDelivery: "4-7 Business Days",
-      processingTime: "2-3 Days",
-      commissionRate: CURRENT_CONFIG.defaultCommission
+      commissionRate: 10
     } as User;
   }, [selectedVendorId, currentUser, products]);
 
@@ -178,31 +148,30 @@ const App: React.FC = () => {
     return products.filter(p => p.vendorId === selectedVendorId);
   }, [selectedVendorId, products]);
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-6">
-        <div className={`w-16 h-16 border-4 border-slate-200 border-t-${primaryColor}-600 rounded-full animate-spin`}></div>
-        <div className="text-center">
-          <p className="text-2xl font-black text-slate-900 tracking-tighter">Syncing {CURRENT_CONFIG.name}...</p>
-          <p className="text-slate-400 font-medium text-sm mt-1 uppercase tracking-widest">Secure Network</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Checking Cloud Sync...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative">
-      {notification && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-10 duration-300">
-          <div className={`px-6 py-3 rounded-full shadow-2xl border flex items-center gap-3 font-bold text-sm ${
-            notification.type === 'success' ? 'bg-emerald-900 text-emerald-50 border-emerald-800' : `bg-${primaryColor}-900 text-${primaryColor}-50 border-${primaryColor}-800`
-          }`}>
-            <div className={`w-2 h-2 rounded-full animate-pulse ${notification.type === 'success' ? 'bg-emerald-400' : `bg-${primaryColor}-400`}`}></div>
-            {notification.message}
-          </div>
+    <div className="min-h-screen flex flex-col">
+      {isDemoMode && (
+        <div className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 text-center flex items-center justify-center gap-4 border-b border-indigo-700">
+          <span>Velo Sandbox Mode Enabled</span>
+          <span className="opacity-40">|</span>
+          <span className="flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Local Performance Active
+          </span>
         </div>
       )}
-
+      
       <Navbar 
         currentUser={currentUser} 
         cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
@@ -213,142 +182,70 @@ const App: React.FC = () => {
 
       <main className="flex-grow container mx-auto px-4 py-8">
         {currentView === 'home' && (
-          <div className="space-y-12">
-            <header className={`bg-gradient-to-r from-slate-900 to-${primaryColor}-900 text-white p-12 rounded-[40px] text-center relative overflow-hidden shadow-2xl`}>
+          <div className="space-y-12 animate-fade-in">
+            <header className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-900 text-white p-12 md:p-24 rounded-[48px] text-center relative overflow-hidden">
+               {/* Background Glow */}
+               <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
+               <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[120px] -ml-48 -mb-48"></div>
+               
                <div className="relative z-10">
-                <h1 className="text-6xl font-black mb-4 tracking-tighter">
-                  {CURRENT_CONFIG.brandName}<span className={`text-${primaryColor}-400`}>MARKET</span>
-                </h1>
-                <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto font-medium">
-                  {CURRENT_CONFIG.tagline}
+                <div className="inline-block bg-indigo-500/20 text-indigo-300 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 border border-indigo-500/20">
+                  Global Multi-Vendor Platform
+                </div>
+                <h1 className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight">Artisanal Excellence, <br/><span className="text-indigo-400">Directly Shared.</span></h1>
+                <p className="text-lg md:text-xl text-slate-400 mb-10 max-w-2xl mx-auto font-medium">
+                  A high-performance marketplace built for the modern creator. <br className="hidden md:block" /> Buy from the best, sell what you love.
                 </p>
-                <div className="flex justify-center gap-4">
-                  <button onClick={() => navigate('browse')} className={`bg-${primaryColor}-500 hover:bg-${primaryColor}-600 px-10 py-4 rounded-full font-black text-lg transition-all shadow-lg transform hover:scale-105 active:scale-95`}>Explore Collection</button>
-                  <button onClick={() => navigate('manual')} className="bg-white/10 hover:bg-white/20 backdrop-blur px-10 py-4 rounded-full font-black text-lg transition-all border border-white/20">How it Works</button>
+                <div className="flex flex-col sm:flex-row justify-center gap-4">
+                  <button onClick={() => navigate('browse')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-600/20">Explore Collection</button>
+                  <button onClick={() => navigate('manual')} className="bg-white/5 hover:bg-white/10 backdrop-blur px-10 py-4 rounded-2xl font-bold transition-all border border-white/10">Platform Tour</button>
                 </div>
                </div>
-               <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-                 <img src="https://images.unsplash.com/photo-1459749411177-042180ce673c?auto=format&fit=crop&q=80&w=1600" className="w-full h-full object-cover" alt="" />
-               </div>
             </header>
-
+            
             <section>
               <div className="flex justify-between items-end mb-8">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 flex items-center gap-2">
-                    <span className={`w-2 h-8 bg-${primaryColor}-500 rounded-full`}></span>
-                    Handpicked for You
-                  </h2>
-                  <p className="text-slate-500 font-medium">Discover the latest creations from our master artisans.</p>
+                  <h2 className="text-3xl font-black text-slate-900 mb-2">Featured Creations</h2>
+                  <p className="text-slate-500 font-medium">Curated pieces from our top artisans</p>
                 </div>
-                <button onClick={() => navigate('browse')} className={`text-${primaryColor}-600 font-black text-sm uppercase tracking-widest hover:underline`}>View All Collection →</button>
+                <button onClick={() => navigate('browse')} className="text-indigo-600 font-bold text-sm hover:underline">View All Collection &rarr;</button>
               </div>
-              <ProductGrid 
-                products={products.slice(0, 4)} 
-                onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }}
-                onAddToCart={addToCart}
-              />
+              <ProductGrid products={products} onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }} onAddToCart={addToCart} />
             </section>
           </div>
         )}
 
-        {currentView === 'browse' && (
-          <section className="space-y-8">
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-              <div className="flex flex-col md:flex-row gap-6 justify-between items-center">
-                <div className="flex-1 w-full">
-                   <h2 className="text-3xl font-black text-slate-900 mb-2">Discovery Hub</h2>
-                   <p className="text-slate-500 font-medium">Browse through {products.length} unique items.</p>
-                </div>
-                <div className="flex flex-wrap gap-4 w-full md:w-auto">
-                  <div className="relative flex-grow md:min-w-[300px]">
-                    <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input 
-                      type="text" 
-                      placeholder="Search items, vendors, or stories..."
-                      className={`w-full pl-10 pr-4 py-3 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-${primaryColor}-500 transition-all font-medium`}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap gap-2 mt-8">
-                {categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                      selectedCategory === cat 
-                        ? `bg-${primaryColor}-600 text-white shadow-lg` 
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {currentView === 'seller-onboarding' && (
+          <SellerOnboarding 
+            onComplete={handleOnboardingComplete}
+            onCancel={() => navigate('home')}
+          />
+        )}
 
-            {filteredProducts.length > 0 ? (
-              <ProductGrid 
-                products={filteredProducts} 
-                onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }}
-                onAddToCart={addToCart}
-              />
-            ) : (
-              <div className="text-center py-32 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                 </div>
-                 <h3 className="text-xl font-bold text-slate-900">No treasures found</h3>
-                 <p className="text-slate-500 max-w-xs mx-auto mt-2">Try adjusting your filters.</p>
-                 <button onClick={() => {setSearchQuery(''); setSelectedCategory('All');}} className={`mt-6 text-${primaryColor}-600 font-black text-sm uppercase tracking-widest hover:underline`}>Clear all filters</button>
-              </div>
-            )}
-          </section>
+        {currentView === 'browse' && (
+          <div className="space-y-8 animate-fade-in">
+            <h1 className="text-4xl font-black">All Creations</h1>
+            <ProductGrid products={products} onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }} onAddToCart={addToCart} />
+          </div>
         )}
 
         {currentView === 'product' && selectedProduct && (
-          <ProductDetail 
-            product={selectedProduct} 
-            onAddToCart={addToCart}
-            onBack={() => navigate('browse')}
-            onVendorClick={(vendorId) => { setSelectedVendorId(vendorId); navigate('vendor-profile'); }}
-          />
+          <ProductDetail product={selectedProduct} onAddToCart={addToCart} onBack={() => navigate('browse')} onVendorClick={(v) => { setSelectedVendorId(v); navigate('vendor-profile'); }} />
         )}
 
         {currentView === 'vendor-profile' && selectedVendor && (
-          <VendorProfile 
-            vendor={selectedVendor}
-            products={vendorProducts}
-            currentUser={currentUser}
-            onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }}
-            onAddToCart={addToCart}
-            onBack={() => navigate('browse')}
-          />
+          <VendorProfile vendor={selectedVendor} products={vendorProducts} currentUser={currentUser} onProductClick={(p) => { setSelectedProduct(p); navigate('product'); }} onAddToCart={addToCart} onBack={() => navigate('browse')} />
         )}
-
-        {currentView === 'policies' && <Policies onBack={() => navigate('home')} user={currentUser} />}
-        {currentView === 'manual' && <UserManual onBack={() => navigate('home')} />}
-        {currentView === 'cart' && <Cart items={cart} onUpdateQuantity={updateQuantity} onRemove={removeFromCart} onCheckout={() => navigate('checkout')} />}
-        {currentView === 'checkout' && <Checkout items={cart} user={currentUser} onSuccess={handleCheckoutSuccess} onBack={() => navigate('cart')} />}
 
         {currentView === 'dashboard' && currentUser?.role === 'seller' && (
-          <SellerDashboard 
-            user={currentUser}
-            products={products.filter(p => p.vendorId === currentUser.id)}
-            onAddProduct={async (p) => { 
-              await ApiService.saveProduct(p);
-              const prodData = await ApiService.getProducts();
-              setProducts(prodData);
-              showNotification("Product published successfully!");
-            }}
-            onUpdateProduct={handleUpdateProduct}
-            onUpdateUser={handleUpdateUser}
-          />
+          <SellerDashboard user={currentUser} products={products.filter(p => p.vendorId === currentUser.id)} onAddProduct={async (p) => { await StorageService.saveProduct(p); setProducts(await StorageService.getProducts()); }} onUpdateProduct={handleUpdateProduct} onUpdateUser={handleUpdateUser} />
         )}
+
+        {currentView === 'cart' && <Cart items={cart} onUpdateQuantity={updateQuantity} onRemove={removeFromCart} onCheckout={() => navigate('checkout')} />}
+        {currentView === 'checkout' && <Checkout items={cart} user={currentUser} onSuccess={handleCheckoutSuccess} onBack={() => navigate('cart')} />}
+        {currentView === 'policies' && <Policies onBack={() => navigate('home')} user={currentUser} />}
+        {currentView === 'manual' && <UserManual onBack={() => navigate('home')} />}
       </main>
 
       <Footer onNavigate={navigate} />
