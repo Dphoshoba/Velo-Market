@@ -1,3 +1,4 @@
+
 import { Product, User, Order, Review } from '../types';
 import { supabase } from './supabase';
 
@@ -8,6 +9,9 @@ const TABLES = {
   REVIEWS: 'reviews',
 };
 
+// Increment this to force a full local storage purge for all users
+const SCHEMA_VERSION = '1.5';
+
 const DEFAULT_MOCK_PRODUCTS: Product[] = [
   {
     id: 'seed-1',
@@ -17,7 +21,7 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     description: 'A hand-thrown stoneware pitcher with a matte basalt glaze. Perfect for morning rituals.',
     price: 85,
     category: 'Home Decor',
-    image: 'https://images.unsplash.com/photo-1578749553370-4bc3b166441e?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&q=80&w=800',
     stock: 12,
     rating: 4.9,
     reviewsCount: 24,
@@ -31,7 +35,7 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     description: 'Hand-woven GOTS certified organic cotton throw, dyed with natural plant-based indigo.',
     price: 145,
     category: 'Home Decor',
-    image: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1520390138845-fd2d229dd553?auto=format&fit=crop&q=80&w=800',
     stock: 5,
     rating: 5.0,
     reviewsCount: 18,
@@ -45,7 +49,7 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     description: 'Damascus steel utility knife with a charred oak handle. Masterfully balanced for precision.',
     price: 210,
     category: 'Kitchen',
-    image: 'https://images.unsplash.com/photo-1594212699903-ec8a3ecc50f6?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1557844352-761f2565b576?auto=format&fit=crop&q=80&w=800',
     stock: 3,
     rating: 4.8,
     reviewsCount: 42,
@@ -59,7 +63,7 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     description: 'Wide, shallow serving bowl with a rich ochre interior and raw clay exterior.',
     price: 65,
     category: 'Home Decor',
-    image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?auto=format&fit=crop&q=80&w=800',
     stock: 20,
     rating: 4.7,
     reviewsCount: 9,
@@ -72,6 +76,14 @@ let connectionError: string | null = null;
 
 const localStore = {
   get: (key: string) => {
+    // Versioned Reset Logic: Wipes the cache if version mismatch is detected
+    const currentVersion = localStorage.getItem('velo_schema_version');
+    if (currentVersion !== SCHEMA_VERSION) {
+      console.warn("VeloMarket: Schema Update Detected. Purging local cache...");
+      Object.values(TABLES).forEach(t => localStorage.removeItem(`velo_fallback_${t}`));
+      localStorage.setItem('velo_schema_version', SCHEMA_VERSION);
+    }
+
     const data = localStorage.getItem(`velo_fallback_${key}`);
     const items = data ? JSON.parse(data) : [];
     
@@ -95,6 +107,7 @@ const localStore = {
   clear: () => {
     Object.values(TABLES).forEach(t => localStorage.removeItem(`velo_fallback_${t}`));
     localStorage.removeItem('velo_current_user_cache');
+    localStorage.removeItem('velo_schema_version');
     window.location.reload();
   }
 };
@@ -106,7 +119,6 @@ export const StorageService = {
 
   testConnection: async (): Promise<boolean> => {
     try {
-      // If URL is default placeholder, skip the fetch attempt entirely to avoid TypeError console noise
       if (supabase.supabaseUrl.includes('your-project-id')) {
         throw new Error("Supabase URL not configured.");
       }
@@ -119,8 +131,6 @@ export const StorageService = {
       return true;
     } catch (error: any) {
       const msg = error.message || String(error);
-      console.warn("VeloMarket: Database is unconfigured or unreachable. Switching to Sandbox Mode.");
-      
       connectionError = msg.includes("fetch") || msg.includes("URL")
         ? "Database unconfigured" 
         : `Connection Error: ${msg}`;

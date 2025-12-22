@@ -5,9 +5,10 @@ import { decodeBase64Audio, encodeAudioBlob, decodeAudioData } from '../services
 
 interface VoiceAssistantProps {
   contextPrompt: string;
+  language?: string;
 }
 
-const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ contextPrompt }) => {
+const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ contextPrompt, language = 'English' }) => {
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -94,10 +95,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ contextPrompt }) => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
           },
-          systemInstruction: `You are a premium marketplace concierge for VeloMarket. 
-          Respond in a warm, sophisticated, helpful tone. 
-          Keep answers brief and conversational. 
-          Context: ${contextPrompt}`
+          systemInstruction: `You are Velo, a luxury marketplace concierge. 
+          Respond with warmth and expertise. 
+          Respond in ${language}. 
+          Keep answers short (under 2 sentences) and conversational.
+          Product Context: ${contextPrompt}`
         }
       });
       
@@ -122,34 +124,34 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ contextPrompt }) => {
 
   return (
     <div className="fixed bottom-8 right-8 z-[100]">
-      <div className={`flex items-center gap-4 bg-white p-3 rounded-full shadow-2xl border transition-all duration-500 ${isActive ? 'pr-6 ring-4 ring-indigo-50 border-indigo-200' : 'w-14 overflow-hidden'}`}>
+      <div className={`flex items-center gap-4 bg-white p-3 rounded-full shadow-[0_30px_100px_-20px_rgba(79,70,229,0.4)] border border-indigo-50 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? 'pr-10 pl-5 ring-[12px] ring-indigo-500/5' : 'w-16 h-16 overflow-hidden'}`}>
         <button 
           onClick={isActive ? stopSession : startSession}
           disabled={isConnecting}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isActive ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-inner ${isActive ? 'bg-slate-900 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-500 scale-110'}`}
         >
           {isConnecting ? (
             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
           ) : isActive ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
           ) : (
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" /></svg>
           )}
         </button>
 
         {isActive && (
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 animate-pulse">
-              {isSpeaking ? 'Velo is speaking...' : 'Listening...'}
+          <div className="flex flex-col min-w-[140px]">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-600 mb-1.5 animate-pulse">
+              {isSpeaking ? 'Velo responding' : `Listening (${language})`}
             </span>
-            <div className="flex gap-1 h-3 items-center">
-              {[1, 2, 3, 4, 5].map(i => (
+            <div className="flex gap-1.5 h-4 items-center">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                 <div 
                   key={i} 
-                  className={`bg-indigo-400 rounded-full w-0.5 transition-all duration-150 ${isSpeaking || isActive ? 'animate-bounce' : 'h-1'}`}
+                  className={`bg-indigo-600 rounded-full w-1 transition-all duration-300 ${isSpeaking ? 'animate-[bounce_0.6s_ease-in-out_infinite]' : 'h-1.5'}`}
                   style={{ 
-                    height: isActive ? `${Math.random() * 100}%` : '20%',
-                    animationDelay: `${i * 0.1}s` 
+                    height: isActive ? `${20 + Math.random() * 80}%` : '20%',
+                    animationDelay: `${i * 0.08}s` 
                   }}
                 ></div>
               ))}

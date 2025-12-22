@@ -2,113 +2,154 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const GeminiService = {
-  async enhanceDescription(productName: string, category: string): Promise<string> {
+  async analyzeVisualSearch(base64Image: string): Promise<string[]> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Write a compelling, poetic, 2-sentence marketing description for a ${category} product named "${productName}". Keep it concise and professional for a high-end marketplace.`,
-        config: { temperature: 0.7 }
+        contents: [
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: 'image/jpeg'
+            }
+          },
+          { text: "Analyze this image and provide 5 keywords that describe the artisanal style, material, and category (e.g., 'minimalist', 'stoneware', 'earthy'). Only return the keywords separated by commas." }
+        ]
       });
-      return response.text || "Quality crafted product perfect for your lifestyle.";
+      return response.text?.split(',').map(k => k.trim().toLowerCase()) || [];
     } catch (error) {
-      console.error("Gemini Error:", error);
-      return "An amazing handmade piece built with care and precision.";
+      console.error("Visual Search Error:", error);
+      return [];
     }
   },
 
-  async generateStoreStory(storeName: string, businessType: string, bio: string): Promise<string> {
+  async translateMarketplace(content: string, targetLanguage: string): Promise<string> {
+    if (targetLanguage === 'English') return content;
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Act as a high-end brand consultant. Generate a sophisticated 3-paragraph "Our Story" section for a store named "${storeName}" which is a ${businessType}. Use this tagline as a seed: "${bio}". Focus on artisanal craft, sustainability, and the human element.`,
-        config: { temperature: 0.8 }
+        contents: `Translate the following artisanal product content into ${targetLanguage}. Maintain the sophisticated, poetic, and luxury brand voice. Content: "${content}"`,
+        config: { temperature: 0.3 }
       });
-      return response.text || "Our journey began with a simple passion for quality craft...";
+      return response.text || content;
     } catch (error) {
-      console.error("Gemini Error:", error);
-      return "Founded on the principles of artisanal excellence and community support.";
+      console.error("Translation Error:", error);
+      return content;
     }
+  },
+
+  async auditPricing(productName: string, currentPrice: number, trends: any[]): Promise<string> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const trendContext = trends.map(t => `${t.topic}: ${t.trend}`).join('; ');
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Act as a luxury marketplace analyst. Given the product "${productName}" priced at $${currentPrice}, and these current market trends: [${trendContext}], suggest if the price is competitive. Provide a 2-sentence recommendation.`,
+      });
+      return response.text || "Pricing seems aligned with current boutique standards.";
+    } catch (error) {
+      return "Unable to perform audit at this time.";
+    }
+  },
+
+  async getMarketplaceTrends(): Promise<{ topic: string, trend: string, sourceUrl: string }[]> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: "What are 3 current trending topics in the global artisanal and handmade marketplace for 2024/2025? Provide short titles and a 1-sentence description. Focus on home decor, fashion, and lifestyle.",
+        config: {
+          tools: [{ googleSearch: {} }],
+        },
+      });
+      const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const firstSource = (sources[0] as any)?.web?.uri || "https://google.com";
+      const lines = response.text?.split('\n').filter(l => l.trim().length > 10).slice(0, 3) || [];
+      return lines.map(line => ({
+        topic: line.split(':')[0]?.replace(/[*#-]/g, '').trim() || "Artisan Craft",
+        trend: line.split(':')[1]?.trim() || line.trim(),
+        sourceUrl: firstSource
+      }));
+    } catch (error) {
+      return [
+        { topic: "Sustainable Texturing", trend: "Raw, unrefined materials are dominating home decor this season.", sourceUrl: "#" },
+        { topic: "Neo-Classical Ceramics", trend: "Ancient silhouettes are making a comeback in modern kitchens.", sourceUrl: "#" }
+      ];
+    }
+  },
+
+  async generateProductImage(prompt: string): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: [{ text: `High-end commercial photo of ${prompt}. Cinematic lighting, high-resolution.` }] },
+      config: { imageConfig: { aspectRatio: "4:3" } }
+    });
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    }
+    throw new Error("No image data");
+  },
+
+  async enhanceDescription(productName: string, category: string): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Poetic 2-sentence description for ${category} product "${productName}".`,
+    });
+    return response.text || "Handmade excellence.";
+  },
+
+  async generateStoreStory(storeName: string, businessType: string, bio: string): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Brand story for ${storeName} (${businessType}). Seed: ${bio}.`,
+    });
+    return response.text || "Our journey...";
   },
 
   async generatePromoVideo(productName: string, description: string, imageUrl: string, onStatusUpdate: (msg: string) => void): Promise<string> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    onStatusUpdate("Initializing high-fidelity rendering engine...");
-    
-    // Convert image URL to base64 if it's a proxy/data URI or fetch it
-    // For demo simplicity, we'll prompt purely with text if we can't easily get the bytes,
-    // but the API supports images. Let's assume text prompt for now for reliability.
-    
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
-      prompt: `A cinematic, high-end commercial for an artisanal product named "${productName}". The product is described as: ${description}. The aesthetic is minimalist, soft lighting, 4k, macro shots of textures.`,
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '16:9'
-      }
+      prompt: `Cinematic promo for ${productName}. ${description}`,
+      config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
     });
-
-    onStatusUpdate("Crafting cinematic frames with Veo 3.1...");
-
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      onStatusUpdate("Polishing textures and lighting (70% complete)...");
+      await new Promise(r => setTimeout(r, 10000));
+      onStatusUpdate("Rendering frames...");
       operation = await ai.operations.getVideosOperation({operation: operation});
     }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Video generation failed to return a URI.");
-    
-    return `${downloadLink}&key=${process.env.API_KEY}`;
+    return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${process.env.API_KEY}`;
   }
 };
 
-// Live API Helpers
 export const decodeBase64Audio = (base64: string) => {
   const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
 };
 
 export const encodeAudioBlob = (data: Float32Array) => {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
-  }
+  const int16 = new Int16Array(data.length);
+  for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
   const bytes = new Uint8Array(int16.buffer);
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return {
-    data: btoa(binary),
-    mimeType: 'audio/pcm;rate=16000',
-  };
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return { data: btoa(binary), mimeType: 'audio/pcm;rate=16000' };
 };
 
-export async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
+export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
+    for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
   }
   return buffer;
 }

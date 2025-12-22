@@ -38,6 +38,10 @@ export interface User {
   shippingPolicy?: string;
   estimatedDelivery?: string;
   commissionRate?: number; // Platform commission percentage
+  // Financial fields
+  stripeConnected?: boolean;
+  stripeAccountId?: string;
+  payoutStatus?: 'pending' | 'active' | 'restricted';
 }
 
 export interface TrackingEntry {
