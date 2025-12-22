@@ -11,6 +11,8 @@ interface NavbarProps {
   onVisualSearch: (file: File) => void;
   currentLanguage: string;
   onLanguageChange: (lang: string) => void;
+  searchTerm: string;
+  onSearch: (val: string) => void;
 }
 
 const LANGUAGES = [
@@ -29,7 +31,9 @@ const Navbar: React.FC<NavbarProps> = ({
   onLogout, 
   onVisualSearch,
   currentLanguage,
-  onLanguageChange
+  onLanguageChange,
+  searchTerm,
+  onSearch
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLangOpen, setIsLangOpen] = useState(false);
@@ -64,7 +68,22 @@ const Navbar: React.FC<NavbarProps> = ({
           
           <div className="hidden lg:flex items-center bg-slate-50 border rounded-2xl px-4 py-2 gap-3 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input type="text" placeholder="Search creators..." className="bg-transparent border-none outline-none text-sm w-48 font-medium" />
+            <input 
+              type="text" 
+              placeholder="Search products or categories..." 
+              className="bg-transparent border-none outline-none text-sm w-56 font-medium"
+              value={searchTerm}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => onSearch('')}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            )}
+            <div className="h-4 w-[1px] bg-slate-200 mx-1"></div>
             <button 
               onClick={() => fileInputRef.current?.click()}
               className="p-1.5 hover:bg-white rounded-lg text-indigo-600 transition-colors"

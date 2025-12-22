@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export const GeminiService = {
   async analyzeVisualSearch(base64Image: string): Promise<string[]> {
@@ -80,35 +80,87 @@ export const GeminiService = {
     }
   },
 
-  async generateProductImage(prompt: string): Promise<string> {
+  async getInventoryOpportunities(category: string): Promise<{ idea: string, reasoning: string, source: string }[]> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: `What are 2 specific product types currently gaining high search interest in the "${category}" artisan niche? Search for recent 2024/2025 consumer trends. 
+        Return a JSON array of objects with fields: "idea" (product name), "reasoning" (1 sentence why), and "source" (URL to a trend report).`,
+        config: { 
+            responseMimeType: "application/json",
+            tools: [{ googleSearch: {} }] 
+        },
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async generateProductImage(prompt: string, base64Reference?: string, highQuality: boolean = false): Promise<string> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const model = highQuality ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+    
+    const parts: any[] = [{ text: `High-end professional commercial studio photography of ${prompt}. Cinematic lighting, minimalist background, 8k resolution, tack sharp focus, luxury brand aesthetic.` }];
+    
+    if (base64Reference) {
+      parts.push({
+        inlineData: {
+          data: base64Reference.includes('base64,') ? base64Reference.split(',')[1] : base64Reference,
+          mimeType: 'image/jpeg'
+        }
+      });
+      parts[0].text = `Using this image as a structural and material reference, create a high-end, professionally lit commercial studio photograph of the product. The result should look like a premium luxury catalog shot of: ${prompt}. Maintain the core shape and texture of the original object but dramatically improve lighting, background, and overall professional appeal.`;
+    }
+
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ text: `High-end commercial photo of ${prompt}. Cinematic lighting, high-resolution.` }] },
-      config: { imageConfig: { aspectRatio: "4:3" } }
+      model: model,
+      contents: { parts },
+      config: { 
+        imageConfig: { 
+          aspectRatio: "4:3",
+          ...(highQuality ? { imageSize: "1K" } : {})
+        } 
+      }
     });
+
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    throw new Error("No image data");
+    throw new Error("No image data generated");
   },
 
-  async enhanceDescription(productName: string, category: string): Promise<string> {
+  async enhanceDescription(productName: string, notes: string): Promise<string> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Poetic 2-sentence description for ${category} product "${productName}".`,
+      contents: `Act as a luxury copywriter for an artisan marketplace. Transform these basic notes into a poetic, compelling 2-sentence product description.
+      Product: ${productName}
+      Notes: ${enhancedNotes(notes)}
+      Return only the description.`,
     });
-    return response.text || "Handmade excellence.";
+    return response.text || notes;
   },
 
-  async generateStoreStory(storeName: string, businessType: string, bio: string): Promise<string> {
+  async generateStorePersona(storeName: string, businessType: string, bio: string): Promise<{ tagline: string, narrative: string }> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Brand story for ${storeName} (${businessType}). Seed: ${bio}.`,
+      contents: `Act as a luxury brand strategist. Create a professional brand identity for a store called "${storeName}" which is a "${businessType}". The current bio is: "${bio}". 
+      Return a JSON object with two fields: "tagline" (one punchy sentence) and "narrative" (two paragraphs of compelling brand story).`,
+      config: { responseMimeType: "application/json" }
     });
-    return response.text || "Our journey...";
+    try {
+      const data = JSON.parse(response.text || '{}');
+      return {
+        tagline: data.tagline || "Artisan excellence for the modern world.",
+        narrative: data.narrative || "Our journey began with a simple vision: to bridge the gap between traditional craft and contemporary living."
+      };
+    } catch (e) {
+      return { tagline: bio, narrative: "Our brand story is currently being curated." };
+    }
   },
 
   async generatePromoVideo(productName: string, description: string, imageUrl: string, onStatusUpdate: (msg: string) => void): Promise<string> {
@@ -126,6 +178,8 @@ export const GeminiService = {
     return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${process.env.API_KEY}`;
   }
 };
+
+function enhancedNotes(n: string) { return n; }
 
 export const decodeBase64Audio = (base64: string) => {
   const binaryString = atob(base64);

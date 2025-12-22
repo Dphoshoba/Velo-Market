@@ -26,18 +26,22 @@ export interface User {
   role: 'buyer' | 'seller' | 'admin';
   avatar: string;
   bio?: string;
-  longDescription?: string; // Detailed store description
+  longDescription?: string; 
   joinedDate: string;
+  // Social
+  following?: string[]; // Array of vendor IDs
   // Seller specific fields
   storeName?: string;
   storeLogo?: string;
+  themeColor?: 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate';
   contactPhone?: string;
+  contactEmail?: string; 
   businessAddress?: string;
-  businessType?: string; // e.g., Sole Trader, LLC, Artisan Collective
+  businessType?: string; 
   socialLinks?: SocialLinks;
   shippingPolicy?: string;
   estimatedDelivery?: string;
-  commissionRate?: number; // Platform commission percentage
+  commissionRate?: number; 
   // Financial fields
   stripeConnected?: boolean;
   stripeAccountId?: string;
@@ -64,7 +68,12 @@ export interface Product {
   status?: 'Active' | 'Shipped' | 'Delivered';
   trackingNumber?: string;
   trackingHistory?: TrackingEntry[];
-  commissionRate?: number; // Added to capture vendor's rate
+  commissionRate?: number; 
+  shippingPolicy?: string;
+  estimatedDelivery?: string;
+  weight?: string;
+  dimensions?: string;
+  materials?: string;
 }
 
 export interface CartItem extends Product {
@@ -88,4 +97,4 @@ export interface Order {
   };
 }
 
-export type View = 'home' | 'browse' | 'product' | 'cart' | 'checkout' | 'dashboard' | 'seller-onboarding' | 'vendor-profile' | 'policies' | 'manual';
+export type View = 'home' | 'browse' | 'product' | 'cart' | 'checkout' | 'dashboard' | 'seller-onboarding' | 'vendor-profile' | 'policies' | 'manual' | 'admin';

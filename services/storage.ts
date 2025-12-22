@@ -10,7 +10,7 @@ const TABLES = {
 };
 
 // Increment this to force a full local storage purge for all users
-const SCHEMA_VERSION = '1.5';
+const SCHEMA_VERSION = '1.7';
 
 const DEFAULT_MOCK_PRODUCTS: Product[] = [
   {
@@ -25,7 +25,12 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     stock: 12,
     rating: 4.9,
     reviewsCount: 24,
-    commissionRate: 12
+    commissionRate: 12,
+    shippingPolicy: 'Shipped in recycled honeycomb paper for maximum protection.',
+    estimatedDelivery: '3-5 Business Days',
+    weight: '1.2 kg',
+    dimensions: '22cm x 12cm',
+    materials: 'Stoneware Clay, Basalt Glaze'
   },
   {
     id: 'seed-2',
@@ -39,7 +44,12 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     stock: 5,
     rating: 5.0,
     reviewsCount: 18,
-    commissionRate: 10
+    commissionRate: 10,
+    shippingPolicy: 'Eco-conscious minimal packaging. Tracked worldwide shipping.',
+    estimatedDelivery: '5-7 Business Days',
+    weight: '0.8 kg',
+    dimensions: '150cm x 200cm',
+    materials: 'GOTS Certified Organic Cotton, Natural Indigo'
   },
   {
     id: 'seed-3',
@@ -53,7 +63,12 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     stock: 3,
     rating: 4.8,
     reviewsCount: 42,
-    commissionRate: 15
+    commissionRate: 15,
+    shippingPolicy: 'Insured express shipping in a signed cedar wood box.',
+    estimatedDelivery: '2-4 Business Days',
+    weight: '150g',
+    dimensions: '15cm Blade',
+    materials: 'Damascus Steel, Charred Oak'
   },
   {
     id: 'seed-4',
@@ -67,7 +82,12 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     stock: 20,
     rating: 4.7,
     reviewsCount: 9,
-    commissionRate: 12
+    commissionRate: 12,
+    shippingPolicy: 'Fragile handling guaranteed. Double-walled corrugated boxing.',
+    estimatedDelivery: '3-5 Business Days',
+    weight: '1.5 kg',
+    dimensions: '30cm Diameter',
+    materials: 'Ochre Pigment, Raw Clay'
   }
 ];
 
@@ -158,6 +178,23 @@ export const StorageService = {
       if (error) throw error;
     } catch (error) {
       localStore.save(TABLES.PRODUCTS, product);
+    }
+  },
+
+  deleteProduct: async (id: string) => {
+    if (useFallback) {
+      const items = localStore.get(TABLES.PRODUCTS);
+      const filtered = items.filter((p: any) => p.id !== id);
+      localStorage.setItem(`velo_fallback_${TABLES.PRODUCTS}`, JSON.stringify(filtered));
+      return;
+    }
+    try {
+      const { error } = await supabase.from(TABLES.PRODUCTS).delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      const items = localStore.get(TABLES.PRODUCTS);
+      const filtered = items.filter((p: any) => p.id !== id);
+      localStorage.setItem(`velo_fallback_${TABLES.PRODUCTS}`, JSON.stringify(filtered));
     }
   },
 

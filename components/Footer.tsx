@@ -1,12 +1,14 @@
+
 import React from 'react';
 import { View } from '../types';
 import { StorageService } from '../services/storage';
 
 interface FooterProps {
   onNavigate: (view: View) => void;
+  onLoginAdmin?: () => void;
 }
 
-const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+const Footer: React.FC<FooterProps> = ({ onNavigate, onLoginAdmin }) => {
   const handleLinkClick = (e: React.MouseEvent, view: View) => {
     e.preventDefault();
     onNavigate(view);
@@ -41,17 +43,17 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <li><button onClick={() => onNavigate('seller-onboarding' as View)} className="hover:text-white transition-colors">Seller Onboarding</button></li>
               <li><button onClick={() => StorageService.resetDemo()} className="text-slate-600 hover:text-red-400 transition-colors flex items-center gap-2">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                Reset Demo Environment
+                Reset Demo
               </button></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-bold mb-6 text-indigo-300 text-xs uppercase tracking-[0.2em]">Compliance</h4>
+            <h4 className="font-bold mb-6 text-indigo-300 text-xs uppercase tracking-[0.2em]">Platform Owner</h4>
             <ul className="space-y-4 text-slate-400 text-sm font-medium">
+              <li><button onClick={onLoginAdmin} className="text-indigo-400 font-black uppercase tracking-widest text-[9px] hover:text-white transition-colors">Revenue Dashboard</button></li>
               <li><button onClick={(e) => handleLinkClick(e, 'policies')} className="hover:text-white transition-colors">Shipping & Returns</button></li>
               <li><button onClick={(e) => handleLinkClick(e, 'policies')} className="hover:text-white transition-colors">Privacy Policy</button></li>
-              <li><button onClick={(e) => handleLinkClick(e, 'policies')} className="hover:text-white transition-colors">Terms of Service</button></li>
             </ul>
           </div>
         </div>
