@@ -83,6 +83,17 @@ const App: React.FC = () => {
 
   const featuredVendors = useMemo(() => {
     const vendors = new Map<string, any>();
+    // Prioritize Moody Dark Loner if exists
+    const mdl = products.find(p => p.vendorId === 'v-moody-1');
+    if (mdl) {
+      vendors.set(mdl.vendorId, {
+        id: mdl.vendorId,
+        name: mdl.vendorName,
+        category: 'Jewelry',
+        avatar: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=200',
+      });
+    }
+
     products.forEach(p => {
       if (!vendors.has(p.vendorId)) {
         vendors.set(p.vendorId, {
@@ -170,6 +181,26 @@ const App: React.FC = () => {
     const isMe = currentUser?.id === selectedVendorId;
     if (isMe) return currentUser;
     
+    if (selectedVendorId === 'v-moody-1') {
+      return {
+        id: 'v-moody-1',
+        name: 'Moody Dark Loner',
+        storeName: 'Moody Dark Loner',
+        role: 'seller',
+        avatar: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=200',
+        joinedDate: '2023-05-12T00:00:00.000Z',
+        businessType: 'Boutique Jewelry',
+        bio: 'Alternative, dark-themed handcrafted jewelry for the unconventional soul.',
+        longDescription: "Moody Dark Loner is a collection of alternative jewelry born from a love for natural stones, textured metals, and the beauty found in darkness. Every piece is hand-fabricated using traditional silversmithing techniques, celebrating raw matrix, erratic shapes, and the bold contrast of dark and light.",
+        contactPhone: "+1 (555) 000-0000",
+        businessAddress: "Portland, Oregon",
+        commissionRate: 10,
+        stripeConnected: true,
+        payoutStatus: 'active',
+        themeColor: 'slate'
+      } as User;
+    }
+
     const p = products.find(p => p.vendorId === selectedVendorId);
     return {
       id: selectedVendorId, 
@@ -223,15 +254,11 @@ const App: React.FC = () => {
                         <div key={i} className="flex gap-12 items-center">
                             <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
-                                New Authentication: Terra Ceramics Listed "Ochre Serving Bowl"
+                                New Authentication: Moody Dark Loner Listed "Hubei Turquoise Ring"
                             </span>
                             <span className="text-white/40 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
-                                Recent Acquisition: Collector in Zurich secured "Kiso Petty Knife"
-                            </span>
-                            <span className="text-white/40 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
-                                Platform Growth: Artisan Collective "Loom & Thread" joined the network
+                                Recent Acquisition: Collector in London secured "White Buffalo Necklace"
                             </span>
                         </div>
                     ))}

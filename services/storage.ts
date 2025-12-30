@@ -10,9 +10,103 @@ const TABLES = {
 };
 
 // Increment this to force a full local storage purge for all users
-const SCHEMA_VERSION = '1.7';
+const SCHEMA_VERSION = '1.8';
 
 const DEFAULT_MOCK_PRODUCTS: Product[] = [
+  {
+    id: 'mdl-1',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'Hubei Turquoise Teardrop Ring',
+    description: 'A striking teardrop-shaped Hubei turquoise stone set in a fine silver serrated bezel with a textured sterling silver band.',
+    price: 65,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1605100804763-247f67b3f416?auto=format&fit=crop&q=80&w=800',
+    stock: 1,
+    rating: 5.0,
+    reviewsCount: 12,
+    commissionRate: 10,
+    shippingPolicy: 'Ships in a gift box with a tracking number via USPS.',
+    estimatedDelivery: '3-5 Business Days',
+    materials: 'Hubei Turquoise, Sterling Silver'
+  },
+  {
+    id: 'mdl-2',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'Ghost Pirate? Necklace',
+    description: 'An intricate, multi-layered pendant featuring a skeletal motif and turquoise accents on a heavy link chain.',
+    price: 200,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=800',
+    stock: 1,
+    rating: 4.9,
+    reviewsCount: 5,
+    commissionRate: 10,
+    shippingPolicy: 'Signature required upon delivery.',
+    estimatedDelivery: '5-7 Business Days',
+    materials: 'Mixed Metals, Turquoise, Bone'
+  },
+  {
+    id: 'mdl-3',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'White Buffalo Me & My Flaws Necklace',
+    description: 'A bold White Buffalo stone pendant set in sterling silver, celebrating the natural imperfections of the earth.',
+    price: 95,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&q=80&w=800',
+    stock: 2,
+    rating: 5.0,
+    reviewsCount: 8,
+    commissionRate: 10,
+    materials: 'White Buffalo Stone, Sterling Silver'
+  },
+  {
+    id: 'mdl-4',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'Rosarita Cuff Bangle',
+    description: 'A vibrant red Rosarita glass stone set in a hand-stamped sterling silver cuff bangle.',
+    price: 110,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&q=80&w=800',
+    stock: 1,
+    rating: 4.8,
+    reviewsCount: 3,
+    commissionRate: 10,
+    materials: 'Rosarita Glass, Sterling Silver'
+  },
+  {
+    id: 'mdl-5',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'Royston Ribbon Ring',
+    description: 'An oval Royston Ribbon turquoise with a beautiful host rock matrix on a wide stamped band.',
+    price: 75,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1603561596112-0a132b757442?auto=format&fit=crop&q=80&w=800',
+    stock: 1,
+    rating: 5.0,
+    reviewsCount: 15,
+    commissionRate: 10,
+    materials: 'Royston Ribbon Turquoise, Sterling Silver'
+  },
+  {
+    id: 'mdl-6',
+    vendorId: 'v-moody-1',
+    vendorName: 'Moody Dark Loner',
+    name: 'Kween Konch Bangle',
+    description: 'A soft pink Queen Conch shell teardrop set in a darkened, textured sterling silver bangle.',
+    price: 100,
+    category: 'Jewelry',
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=800',
+    stock: 1,
+    rating: 4.9,
+    reviewsCount: 7,
+    commissionRate: 10,
+    materials: 'Queen Conch Shell, Sterling Silver'
+  },
   {
     id: 'seed-1',
     vendorId: 'v-artisan-1',
@@ -26,68 +120,7 @@ const DEFAULT_MOCK_PRODUCTS: Product[] = [
     rating: 4.9,
     reviewsCount: 24,
     commissionRate: 12,
-    shippingPolicy: 'Shipped in recycled honeycomb paper for maximum protection.',
-    estimatedDelivery: '3-5 Business Days',
-    weight: '1.2 kg',
-    dimensions: '22cm x 12cm',
     materials: 'Stoneware Clay, Basalt Glaze'
-  },
-  {
-    id: 'seed-2',
-    vendorId: 'v-artisan-2',
-    vendorName: 'Loom & Thread',
-    name: 'Organic Indigo Throw',
-    description: 'Hand-woven GOTS certified organic cotton throw, dyed with natural plant-based indigo.',
-    price: 145,
-    category: 'Home Decor',
-    image: 'https://images.unsplash.com/photo-1520390138845-fd2d229dd553?auto=format&fit=crop&q=80&w=800',
-    stock: 5,
-    rating: 5.0,
-    reviewsCount: 18,
-    commissionRate: 10,
-    shippingPolicy: 'Eco-conscious minimal packaging. Tracked worldwide shipping.',
-    estimatedDelivery: '5-7 Business Days',
-    weight: '0.8 kg',
-    dimensions: '150cm x 200cm',
-    materials: 'GOTS Certified Organic Cotton, Natural Indigo'
-  },
-  {
-    id: 'seed-3',
-    vendorId: 'v-artisan-3',
-    vendorName: 'Kiso Knives',
-    name: 'Hand-Forged Petty Knife',
-    description: 'Damascus steel utility knife with a charred oak handle. Masterfully balanced for precision.',
-    price: 210,
-    category: 'Kitchen',
-    image: 'https://images.unsplash.com/photo-1557844352-761f2565b576?auto=format&fit=crop&q=80&w=800',
-    stock: 3,
-    rating: 4.8,
-    reviewsCount: 42,
-    commissionRate: 15,
-    shippingPolicy: 'Insured express shipping in a signed cedar wood box.',
-    estimatedDelivery: '2-4 Business Days',
-    weight: '150g',
-    dimensions: '15cm Blade',
-    materials: 'Damascus Steel, Charred Oak'
-  },
-  {
-    id: 'seed-4',
-    vendorId: 'v-artisan-1',
-    vendorName: 'Terra Ceramics',
-    name: 'Ochre Serving Bowl',
-    description: 'Wide, shallow serving bowl with a rich ochre interior and raw clay exterior.',
-    price: 65,
-    category: 'Home Decor',
-    image: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?auto=format&fit=crop&q=80&w=800',
-    stock: 20,
-    rating: 4.7,
-    reviewsCount: 9,
-    commissionRate: 12,
-    shippingPolicy: 'Fragile handling guaranteed. Double-walled corrugated boxing.',
-    estimatedDelivery: '3-5 Business Days',
-    weight: '1.5 kg',
-    dimensions: '30cm Diameter',
-    materials: 'Ochre Pigment, Raw Clay'
   }
 ];
 
@@ -96,10 +129,8 @@ let connectionError: string | null = null;
 
 const localStore = {
   get: (key: string) => {
-    // Versioned Reset Logic: Wipes the cache if version mismatch is detected
     const currentVersion = localStorage.getItem('velo_schema_version');
     if (currentVersion !== SCHEMA_VERSION) {
-      console.warn("VeloMarket: Schema Update Detected. Purging local cache...");
       Object.values(TABLES).forEach(t => localStorage.removeItem(`velo_fallback_${t}`));
       localStorage.setItem('velo_schema_version', SCHEMA_VERSION);
     }
@@ -107,7 +138,6 @@ const localStore = {
     const data = localStorage.getItem(`velo_fallback_${key}`);
     const items = data ? JSON.parse(data) : [];
     
-    // Seed default products if inventory is empty
     if (key === TABLES.PRODUCTS && items.length === 0) {
       localStorage.setItem(`velo_fallback_${key}`, JSON.stringify(DEFAULT_MOCK_PRODUCTS));
       return DEFAULT_MOCK_PRODUCTS;
@@ -150,11 +180,6 @@ export const StorageService = {
       connectionError = null;
       return true;
     } catch (error: any) {
-      const msg = error.message || String(error);
-      connectionError = msg.includes("fetch") || msg.includes("URL")
-        ? "Database unconfigured" 
-        : `Connection Error: ${msg}`;
-        
       useFallback = true;
       return false;
     }
